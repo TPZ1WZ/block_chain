@@ -1,84 +1,112 @@
-import { useCallback, useEffect, useState } from "react";
+import { createElement, useCallback, useEffect, useMemo, useState } from "react";
 import { ethers } from "ethers";
-
-import { connectWallet } from "./lib/ethereum";
+import { AnimatePresence, motion } from "framer-motion";
 import {
-  getTicketBoard,
-  getTicketEscrow,
-  getMultiSig,
-} from "./lib/contracts";
+  AlertCircle,
+  CheckCircle2,
+  Loader2,
+  Settings,
+  History,
+  Wallet,
+  X,
+} from "lucide-react";
 
-import CreateTicket from "./components/CreateTicket";
-import TicketList from "./components/TicketList";
-import TicketDetail from "./components/TicketDetail";
+import Layout from "./components/Layout";
+import CreateTicketForm from "./components/CreateTicketForm";
+import HeroSection from "./components/HeroSection";
+import TicketBoard from "./components/TicketBoard";
+import TicketDetailPanel from "./components/TicketDetailPanel";
+import WalletCard from "./components/WalletCard";
+import { getMultiSig, getTicketBoard, getTicketEscrow } from "./lib/contracts";
+import { CHAIN_ID, MULTISIG_ADDRESS, TICKET_BOARD_ADDRESS } from "./config";
+import { formatEth } from "./utils/format";
 
-import {
-  TICKET_BOARD_ADDRESS,
-  MULTISIG_ADDRESS,
-  CHAIN_ID,
-} from "./config";
+function normalizeError(error) {
+  return (
+    error?.reason ||
+    error?.data?.message ||
+    error?.shortMessage ||
+    error?.message ||
+    "Giao dịch thất bại"
+  );
+}
 
-function App() {
+export default function App() {
+  const [provider, setProvider] = useState(null);
   const [signer, setSigner] = useState(null);
-  const [address, setAddress] = useState(null);
-
-  const [board, setBoard] = useState(null);
-  const [multisig, setMultisig] = useState(null);
-  const [arbiters, setArbiters] = useState([]);
+  const [address, setAddress] = useState("");
+  const [balance, setBalance] = useState("0");
+  const [networkName, setNetworkName] = useState("Hardhat Local");
 
   const [tickets, setTickets] = useState([]);
   const [selectedTicket, setSelectedTicket] = useState(null);
-  const [ticketEscrow, setTicketEscrow] = useState(null);
-
+  const [arbiters, setArbiters] = useState([]);
+  const [activePage, setActivePage] = useState("overview");
+  const [boardTab, setBoardTab] = useState("all");
   const [loadingTickets, setLoadingTickets] = useState(false);
-  const [connectError, setConnectError] = useState(null);
-  const [pageError, setPageError] = useState(null);
+  const [walletError, setWalletError] = useState("");
+  const [txState, setTxState] = useState({ stage: "idle", label: "" });
+  const [toasts, setToasts] = useState([]);
 
-  const short = (addr) =>
-    addr ? `${addr.slice(0, 6)}...${addr.slice(-4)}` : "—";
+  const isConnected = Boolean(signer && address);
 
-  async function connect() {
-    try {
-      setConnectError(null);
-
-      const res = await connectWallet();
-      if (!res) return;
-
-      setSigner(res.signer);
-      setAddress(res.address);
-    } catch (e) {
-      console.error("Connect wallet failed:", e);
-      setConnectError(e?.message || "Failed to connect wallet");
-    }
+  function pushToast(type, message) {
+    const id = crypto.randomUUID();
+    setToasts((items) => [...items, { id, type, message }]);
+    window.setTimeout(() => {
+      setToasts((items) => items.filter((item) => item.id !== id));
+    }, 4200);
   }
 
-  useEffect(() => {
-    if (!signer) return;
-    setBoard(getTicketBoard(signer));
-  }, [signer]);
-
-  useEffect(() => {
-    if (!signer) return;
-
-    async function initMultisig() {
-      try {
-        const m = getMultiSig(signer);
-        setMultisig(m);
-
-        const list = await m.getArbiters();
-        setArbiters(list);
-      } catch (e) {
-        console.error("Load multisig/arbiters failed:", e);
-        setArbiters([]);
-      }
+  const connectWallet = useCallback(async () => {
+    if (!window.ethereum) {
+      setWalletError("Vui lòng cài MetaMask hoặc ví tương thích EIP-1193.");
+      return;
     }
 
-    initMultisig();
-  }, [signer]);
+    try {
+      setWalletError("");
+      const browserProvider = new ethers.BrowserProvider(window.ethereum);
+      await browserProvider.send("eth_requestAccounts", []);
+      const nextSigner = await browserProvider.getSigner();
+      const nextAddress = await nextSigner.getAddress();
+      const network = await browserProvider.getNetwork();
 
-  const readTicket = useCallback(async (addr, runner) => {
-    const t = getTicketEscrow(addr, runner);
+      setProvider(browserProvider);
+      setSigner(nextSigner);
+      setAddress(nextAddress);
+      setNetworkName(
+        Number(network.chainId) === CHAIN_ID
+          ? "Hardhat Local"
+          : network.name || `Chain ${network.chainId}`
+      );
+      pushToast("success", "Đã kết nối ví");
+    } catch (error) {
+      setWalletError(normalizeError(error));
+      pushToast("error", normalizeError(error));
+    }
+  }, []);
 
+  const refreshWallet = useCallback(async () => {
+    if (!window.ethereum || !provider || !address) return;
+    try {
+      const [rawBalance, network] = await Promise.all([
+        provider.getBalance(address),
+        provider.getNetwork(),
+      ]);
+      setBalance(formatEth(rawBalance));
+      setNetworkName(
+        Number(network.chainId) === CHAIN_ID
+          ? "Hardhat Local"
+          : network.name || `Chain ${network.chainId}`
+      );
+    } catch (error) {
+      console.error("refreshWallet failed", error);
+    }
+  }, [address, provider]);
+
+  const readTicket = useCallback(async (ticketAddress, runner) => {
+    const escrow = getTicketEscrow(ticketAddress, runner);
     const [
       company,
       worker,
@@ -91,25 +119,20 @@ function App() {
       proofNote,
       rejectionReason,
     ] = await Promise.all([
-      t.company(),
-      t.worker(),
-      t.title(),
-      t.detailsCID(),
-      t.amount(),
-      t.deadline(),
-      t.status(),
-      t.proofCID(),
-      t.proofNote(),
-      t.rejectionReason(),
+      escrow.company(),
+      escrow.worker(),
+      escrow.title(),
+      escrow.detailsCID(),
+      escrow.amount(),
+      escrow.deadline(),
+      escrow.status(),
+      escrow.proofCID(),
+      escrow.proofNote(),
+      escrow.rejectionReason(),
     ]);
-    // 🔥 THÊM LOG Ở ĐÂY
-    console.log("📦 Ticket:", addr);
-    console.log("👷 Worker:", worker);
-    console.log("💰 Amount:", ethers.formatEther(amount));
-    console.log("📊 Status:", Number(status));
 
     return {
-      address: addr,
+      address: ticketAddress,
       company,
       worker,
       title,
@@ -125,196 +148,495 @@ function App() {
 
   const loadTickets = useCallback(async () => {
     if (!window.ethereum) return;
-    if (!signer) return;
 
     try {
       setLoadingTickets(true);
-      setPageError(null);
-
-      const provider = new ethers.BrowserProvider(window.ethereum);
-      const boardRead = getTicketBoard(provider);
-
-      const ticketAddresses = await boardRead.getAllTickets();
-      console.log("🔥 ticketAddresses:", ticketAddresses);
-
-      const result = await Promise.all(
-        ticketAddresses.map((addr) => readTicket(addr, provider))
+      const readProvider = provider || new ethers.BrowserProvider(window.ethereum);
+      const board = getTicketBoard(readProvider);
+      const addresses = await board.getAllTickets();
+      const nextTickets = await Promise.all(
+        addresses.map((ticketAddress) => readTicket(ticketAddress, readProvider))
       );
 
-      setTickets(result);
-
-      if (selectedTicket) {
-        const freshSelected = result.find(
-          (item) =>
-            item.address.toLowerCase() === selectedTicket.address.toLowerCase()
+      setTickets(nextTickets);
+      setSelectedTicket((current) => {
+        if (!current) return null;
+        return (
+          nextTickets.find(
+            (ticket) => ticket.address.toLowerCase() === current.address.toLowerCase()
+          ) || null
         );
-
-        if (
-          freshSelected &&
-          freshSelected.status !== selectedTicket.status
-        ) {
-          setSelectedTicket(freshSelected);
-        }
-      }
-    } catch (e) {
-      console.error("loadTickets failed:", e);
-      setPageError(e?.reason || e?.message || "Failed to load tickets");
+      });
+    } catch (error) {
+      console.error("loadTickets failed", error);
+      pushToast("error", normalizeError(error));
     } finally {
       setLoadingTickets(false);
     }
-  }, [readTicket, selectedTicket, signer]);
+  }, [provider, readTicket]);
 
-  async function selectTicket(ticketAddress) {
-    if (!signer) return;
-
+  const loadArbiters = useCallback(async () => {
+    if (!provider) return;
     try {
-      setPageError(null);
-
-      const found =
-        tickets.find(
-          (item) => item.address.toLowerCase() === ticketAddress.toLowerCase()
-        ) || null;
-
-      const contract = getTicketEscrow(ticketAddress, signer);
-
-      setTicketEscrow(contract);
-
-      if (found) {
-        setSelectedTicket(found);
-      } else {
-        const provider = new ethers.BrowserProvider(window.ethereum);
-        const fresh = await readTicket(ticketAddress, provider);
-        setSelectedTicket(fresh);
-      }
-    } catch (e) {
-      console.error("selectTicket failed:", e);
-      setPageError(e?.reason || e?.message || "Failed to open ticket");
+      const multisig = getMultiSig(provider);
+      setArbiters(await multisig.getArbiters());
+    } catch (error) {
+      console.error("loadArbiters failed", error);
+      setArbiters([]);
     }
-  }
+  }, [provider]);
 
-  const refreshSelectedTicket = useCallback(async () => {
-    if (!window.ethereum) return;
-    if (!selectedTicket) {
-      await loadTickets();
+  async function runTransaction(label, callback) {
+    if (!signer) {
+      pushToast("error", "Vui lòng kết nối ví trước khi gửi giao dịch");
       return;
     }
 
     try {
-      setPageError(null);
+      setTxState({ stage: "wallet", label });
+      const tx = await callback();
+      setTxState({ stage: "pending", label });
+      await tx.wait();
+      setTxState({ stage: "confirmed", label });
+      pushToast("success", `${label} đã xác nhận`);
+      await Promise.all([loadTickets(), refreshWallet()]);
+      window.setTimeout(() => setTxState({ stage: "idle", label: "" }), 1400);
+    } catch (error) {
+      const message = normalizeError(error);
+      setTxState({ stage: "error", label: message });
+      pushToast("error", message);
+    }
+  }
 
-      const provider = new ethers.BrowserProvider(window.ethereum);
-      const fresh = await readTicket(selectedTicket.address, provider);
+  async function createTicket(form) {
+    await runTransaction("Tạo Ticket", async () => {
+      const board = getTicketBoard(signer);
+      return board.createTicket(form.title, form.detailsCID, form.deadline, {
+        value: ethers.parseEther(form.amount),
+      });
+    });
+  }
 
-      setSelectedTicket(fresh);
+  async function ticketAction(ticket, action, payload = {}) {
+    await runTransaction(action.label, async () => {
+      const escrow = getTicketEscrow(ticket.address, signer);
 
-      if (signer) {
-        setTicketEscrow(getTicketEscrow(selectedTicket.address, signer));
+      if (action.type === "claim") return escrow.claimTicket();
+      if (action.type === "cancel") return escrow.cancelOpenTicket();
+      if (action.type === "approve") return escrow.approveSubmission();
+      if (action.type === "resubmit") return escrow.requestResubmission(payload.reason);
+      if (action.type === "company-dispute") return escrow.disputeByCompany();
+      if (action.type === "worker-dispute") return escrow.disputeByWorker();
+      if (action.type === "submit-proof") {
+        return escrow.submitProof(payload.proofCID, payload.proofNote);
+      }
+      if (action.type === "vote") {
+        const multisig = getMultiSig(signer);
+        return multisig.vote(ticket.address, payload.payWorker);
       }
 
-      await loadTickets();
-    } catch (e) {
-      console.error("refreshSelectedTicket failed:", e);
-      setPageError(e?.reason || e?.message || "Failed to refresh ticket");
-    }
-  }, [loadTickets, readTicket, selectedTicket, signer]);
+      throw new Error("Hành động chưa được hỗ trợ");
+    });
+  }
 
   useEffect(() => {
-    if (!signer) return;
+    if (!window.ethereum) return undefined;
+
+    const handleAccountsChanged = () => {
+      setSigner(null);
+      setAddress("");
+      setSelectedTicket(null);
+      connectWallet();
+    };
+
+    const handleChainChanged = () => {
+      window.location.reload();
+    };
+
+    window.ethereum.on?.("accountsChanged", handleAccountsChanged);
+    window.ethereum.on?.("chainChanged", handleChainChanged);
+
+    return () => {
+      window.ethereum.removeListener?.("accountsChanged", handleAccountsChanged);
+      window.ethereum.removeListener?.("chainChanged", handleChainChanged);
+    };
+  }, [connectWallet]);
+
+  useEffect(() => {
+    if (!provider) return;
+    refreshWallet();
     loadTickets();
-  }, [signer, loadTickets]);
+    loadArbiters();
+  }, [loadArbiters, loadTickets, provider, refreshWallet]);
 
-  if (!signer) {
+  const stats = useMemo(() => {
+    const open = tickets.filter((ticket) => ticket.status === 0).length;
+    const active = tickets.filter((ticket) => [1, 2].includes(ticket.status)).length;
+    const paid = tickets.filter((ticket) => ticket.status === 4).length;
+    const disputed = tickets.filter((ticket) => ticket.status === 3).length;
+    return { open, active, paid, disputed, total: tickets.length };
+  }, [tickets]);
+
+  const myCreatedTickets = useMemo(() => {
+    if (!address) return [];
+    return tickets.filter(
+      (ticket) => ticket.company.toLowerCase() === address.toLowerCase()
+    );
+  }, [address, tickets]);
+
+  const myClaimedTickets = useMemo(() => {
+    if (!address) return [];
+    return tickets.filter(
+      (ticket) => ticket.worker.toLowerCase() === address.toLowerCase()
+    );
+  }, [address, tickets]);
+
+  const pendingTickets = useMemo(
+    () =>
+      [...myCreatedTickets, ...myClaimedTickets].filter((ticket) =>
+        [1, 2, 3].includes(ticket.status)
+      ),
+    [myClaimedTickets, myCreatedTickets]
+  );
+
+  function renderPage() {
+    const commonBoardProps = {
+      onSelect: setSelectedTicket,
+      selectedTicket,
+      address,
+      loading: loadingTickets,
+      onTicketAction: ticketAction,
+    };
+
+    if (activePage === "create") {
+      return (
+        <section className="grid grid-cols-1 gap-7 xl:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="space-y-6">
+            <PageIntro
+              title="Tạo Ticket mới"
+              description="Nhập thông tin công việc, khóa ETH vào Smart Contract Escrow và chờ Worker nhận việc."
+            />
+            <CreateTicketForm
+              disabled={!isConnected}
+              isBusy={txState.stage !== "idle"}
+              onCreate={createTicket}
+            />
+          </div>
+          <aside className="space-y-5">
+            <GuideCard />
+            <WalletCard
+              address={address}
+              balance={balance}
+              networkName={networkName}
+              isConnected={isConnected}
+              onConnect={connectWallet}
+            />
+          </aside>
+        </section>
+      );
+    }
+
+    if (activePage === "board") {
+      return (
+        <section className="grid grid-cols-1 gap-7 xl:grid-cols-[minmax(0,1fr)_320px]">
+          <TicketBoard
+            tickets={tickets}
+            activeTab={boardTab}
+            onTabChange={setBoardTab}
+            {...commonBoardProps}
+          />
+          <TicketDetailPanel
+            ticket={selectedTicket}
+            address={address}
+            arbiters={arbiters}
+            disabled={!isConnected || txState.stage !== "idle"}
+            onAction={ticketAction}
+          />
+        </section>
+      );
+    }
+
+    if (activePage === "myTickets") {
+      return (
+        <section className="space-y-6">
+          <PageIntro
+            title="Ticket của tôi"
+            description="Theo dõi các ticket bạn đã tạo, đã nhận hoặc đang chờ xử lý."
+          />
+          <MyTicketsPage
+            created={myCreatedTickets}
+            claimed={myClaimedTickets}
+            pending={pendingTickets}
+            commonBoardProps={commonBoardProps}
+          />
+        </section>
+      );
+    }
+
+    if (activePage === "wallet") {
+      return (
+        <section className="grid grid-cols-1 gap-7 xl:grid-cols-[420px_minmax(0,1fr)]">
+          <WalletCard
+            address={address}
+            balance={balance}
+            networkName={networkName}
+            isConnected={isConnected}
+            onConnect={connectWallet}
+          />
+          <InfoPanel
+            icon={Wallet}
+            title="Thông tin ví"
+            items={[
+              ["Địa chỉ ví", address || "Chưa kết nối"],
+              ["Số dư", `${balance} ETH`],
+              ["Mạng hiện tại", networkName],
+              ["Gợi ý", "Hãy chọn Hardhat Local để demo với ETH giả."],
+            ]}
+          />
+        </section>
+      );
+    }
+
+    if (activePage === "history") {
+      return (
+        <InfoPanel
+          icon={History}
+          title="Lịch sử giao dịch"
+          description="Chưa có giao dịch nào được ghi nhận trong giao diện. MetaMask vẫn có thể hiển thị lịch sử ký giao dịch riêng."
+          items={[]}
+        />
+      );
+    }
+
+    if (activePage === "settings") {
+      return (
+        <InfoPanel
+          icon={Settings}
+          title="Cài đặt hệ thống"
+          description="Thông tin cấu hình smart contract đang được frontend sử dụng."
+          items={[
+            ["Mạng", networkName],
+            ["Chain ID", String(CHAIN_ID)],
+            ["TicketBoard", TICKET_BOARD_ADDRESS],
+            ["DisputeMultiSig", MULTISIG_ADDRESS],
+            ["Giao diện", "Sáng, Web3 SaaS"],
+          ]}
+        />
+      );
+    }
+
     return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center px-6">
-        <div className="bg-white rounded-2xl shadow-lg p-8 w-full max-w-md text-center space-y-4">
-          <h1 className="text-2xl font-bold text-gray-800">
-            TrustLance Ticket Platform
-          </h1>
-
-          <p className="text-sm text-gray-500">
-            Connect your wallet to manage tickets on local chain {CHAIN_ID}.
-          </p>
-
-          <button
-            onClick={connect}
-            className="w-full px-6 py-3 bg-black text-white rounded-lg hover:bg-gray-800"
-          >
-            Connect Wallet
-          </button>
-
-          {connectError && (
-            <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg p-3">
-              {connectError}
-            </div>
-          )}
-        </div>
-      </div>
+      <>
+        <HeroSection stats={stats} />
+        <section className="grid grid-cols-1 gap-7 xl:grid-cols-[minmax(0,1fr)_320px]">
+          <TicketBoard
+            tickets={tickets.slice(0, 4)}
+            activeTab="all"
+            onTabChange={() => {}}
+            showTabs={false}
+            title="Ticket mới nhất"
+            {...commonBoardProps}
+          />
+          <aside className="space-y-5">
+            <WalletCard
+              address={address}
+              balance={balance}
+              networkName={networkName}
+              isConnected={isConnected}
+              onConnect={connectWallet}
+            />
+            <TicketDetailPanel
+              ticket={selectedTicket}
+              address={address}
+              arbiters={arbiters}
+              disabled={!isConnected || txState.stage !== "idle"}
+              onAction={ticketAction}
+            />
+          </aside>
+        </section>
+      </>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
-        <p className="text-xs text-gray-400">
-          TicketBoard: {TICKET_BOARD_ADDRESS}
-          <br />
-          MultiSig: {MULTISIG_ADDRESS}
-          <br />
-          Chain ID: {CHAIN_ID}
-        </p>
+    <Layout
+      address={address}
+      balance={balance}
+      isConnected={isConnected}
+      activePage={activePage}
+      onPageChange={setActivePage}
+      onConnect={connectWallet}
+      networkName={networkName}
+      walletError={walletError}
+    >
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={activePage}
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -8 }}
+          transition={{ duration: 0.25, ease: "easeOut" }}
+        >
+          {renderPage()}
+        </motion.div>
+      </AnimatePresence>
 
-        <header className="flex justify-between items-center">
-          <h1 className="text-2xl font-bold text-gray-800">
-            TrustLance Ticket Platform
-          </h1>
-
-          <div className="text-sm text-gray-600 bg-white px-3 py-2 rounded-lg border">
-            {short(address)}
-          </div>
-        </header>
-
-        {pageError && (
-          <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-4">
-            {pageError}
-          </div>
-        )}
-
-        <CreateTicket signer={signer} onCreated={loadTickets} />
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="md:col-span-1 space-y-3">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-gray-800">
-                Ticket Board
-              </h2>
-              {loadingTickets && (
-                <span className="text-sm text-gray-500">Loading...</span>
-              )}
-            </div>
-
-            <TicketList tickets={tickets} onSelect={selectTicket} />
-          </div>
-
-          <div className="md:col-span-2">
-            {selectedTicket ? (
-              <TicketDetail
-                escrow={ticketEscrow}
-                multisig={multisig}
-                arbiters={arbiters}
-                ticket={selectedTicket}
-                address={address}
-                refresh={refreshSelectedTicket}
-              />
+      {txState.stage !== "idle" && (
+        <div className="fixed bottom-6 left-1/2 z-50 w-[calc(100%-32px)] max-w-md -translate-x-1/2 rounded-2xl border border-white/70 bg-white/90 p-4 shadow-2xl shadow-blue-900/15 backdrop-blur">
+          <div className="flex items-center gap-3">
+            {txState.stage === "error" ? (
+              <AlertCircle className="h-5 w-5 text-rose-500" />
+            ) : txState.stage === "confirmed" ? (
+              <CheckCircle2 className="h-5 w-5 text-emerald-500" />
             ) : (
-              <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-6 text-gray-500">
-                Select a ticket to view details.
-              </div>
+              <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
             )}
+            <div>
+              <p className="text-sm font-semibold text-slate-900">
+                {txState.stage === "wallet" && "Đang chờ xác nhận trong ví"}
+                {txState.stage === "pending" && "Giao dịch đang xử lý"}
+                {txState.stage === "confirmed" && "Giao dịch đã xác nhận"}
+                {txState.stage === "error" && "Giao dịch lỗi"}
+              </p>
+              <p className="text-xs text-slate-500">{txState.label}</p>
+            </div>
           </div>
         </div>
+      )}
+
+      <div className="fixed right-5 top-5 z-50 space-y-3">
+        {toasts.map((toast) => (
+          <div
+            key={toast.id}
+            className="flex min-w-72 items-start gap-3 rounded-2xl border border-white/70 bg-white/95 p-4 shadow-xl shadow-slate-900/10 backdrop-blur"
+          >
+            {toast.type === "success" ? (
+              <CheckCircle2 className="mt-0.5 h-5 w-5 text-emerald-500" />
+            ) : (
+              <AlertCircle className="mt-0.5 h-5 w-5 text-rose-500" />
+            )}
+            <p className="flex-1 text-sm font-medium text-slate-700">{toast.message}</p>
+            <button
+              type="button"
+              onClick={() =>
+                setToasts((items) => items.filter((item) => item.id !== toast.id))
+              }
+              className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        ))}
       </div>
+    </Layout>
+  );
+}
+
+function PageIntro({ title, description }) {
+  return (
+    <div className="rounded-[26px] border border-[#E6EAF5] bg-white/78 p-5 shadow-[0_16px_50px_rgba(15,23,42,0.055)] backdrop-blur">
+      <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-600">
+        OpenTask
+      </p>
+      <h2 className="mt-2 text-3xl font-black tracking-tight text-[#071127]">
+        {title}
+      </h2>
+      <p className="mt-2 text-sm leading-6 text-slate-500">{description}</p>
     </div>
   );
 }
 
-export default App;
+function GuideCard() {
+  return (
+    <div className="rounded-[26px] border border-[#E6EAF5] bg-white/78 p-5 shadow-[0_16px_50px_rgba(15,23,42,0.055)] backdrop-blur">
+      <h3 className="text-lg font-black text-[#071127]">Hướng dẫn ký quỹ ETH</h3>
+      <p className="mt-2 text-sm leading-6 text-slate-500">
+        Khi tạo ticket, ETH được khóa trong Smart Contract Escrow. Khoản ký quỹ
+        chỉ được trả cho Worker khi bạn duyệt thanh toán hoặc được xử lý qua
+        cơ chế tranh chấp.
+      </p>
+    </div>
+  );
+}
+
+function MyTicketsPage({ created, claimed, pending, commonBoardProps }) {
+  const [tab, setTab] = useState("created");
+  const tabs = [
+    { id: "created", label: "Tôi đã tạo", tickets: created },
+    { id: "claimed", label: "Tôi đã nhận", tickets: claimed },
+    { id: "pending", label: "Đang chờ xử lý", tickets: pending },
+  ];
+  const current = tabs.find((item) => item.id === tab) || tabs[0];
+
+  return (
+    <div className="space-y-5">
+      <div className="flex gap-2 overflow-x-auto rounded-2xl border border-[#E6EAF5] bg-white/76 p-1.5">
+        {tabs.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => setTab(item.id)}
+            className={`rounded-xl px-4 py-2.5 text-sm font-black transition ${
+              tab === item.id
+                ? "bg-gradient-to-r from-blue-600 to-violet-600 text-white shadow-lg shadow-blue-500/20"
+                : "text-slate-500 hover:bg-white hover:text-slate-900"
+            }`}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+
+      <TicketBoard
+        tickets={current.tickets}
+        activeTab="all"
+        onTabChange={() => {}}
+        showTabs={false}
+        title={current.label}
+        {...commonBoardProps}
+      />
+    </div>
+  );
+}
+
+function InfoPanel({ icon, title, description, items }) {
+  return (
+    <section className="rounded-[28px] border border-[#E6EAF5] bg-white/80 p-6 shadow-[0_18px_60px_rgba(15,23,42,0.07)] backdrop-blur-xl">
+      <div className="flex items-center gap-3">
+        <div className="grid h-11 w-11 place-items-center rounded-2xl bg-gradient-to-br from-blue-600 to-violet-600 text-white">
+          {createElement(icon, { className: "h-5 w-5" })}
+        </div>
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-600">
+            OpenTask
+          </p>
+          <h2 className="text-2xl font-black text-[#071127]">{title}</h2>
+        </div>
+      </div>
+
+      {description && (
+        <p className="mt-4 rounded-2xl border border-dashed border-[#E6EAF5] bg-slate-50/80 p-5 text-sm font-semibold leading-6 text-slate-500">
+          {description}
+        </p>
+      )}
+
+      {items.length > 0 && (
+        <div className="mt-5 grid gap-3">
+          {items.map(([label, value]) => (
+            <div
+              key={label}
+              className="rounded-2xl border border-[#E6EAF5] bg-white/78 px-4 py-3"
+            >
+              <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-400">
+                {label}
+              </p>
+              <p className="mt-1 break-all text-sm font-bold text-slate-800">
+                {value}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
