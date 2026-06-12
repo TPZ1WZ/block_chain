@@ -1,0 +1,4 @@
+- generic [ref=e4]:
+  - heading "TrustLance Ticket Platform" [level=1] [ref=e5]
+  - paragraph [ref=e6]: Connect your wallet to manage tickets on local chain 31337.
+  - button "Connect Wallet" [ref=e7] [cursor=pointer]

@@ -1,0 +1,15 @@
+[      41ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=8f2f45eb:20102
+[   15140ms] [LOG] 🔥 ticketAddresses: Proxy(_Result) @ http://localhost:5173/src/App.jsx:117
+[   15159ms] [LOG] 📦 Ticket: 0xCafac3dD18aC6c6e92c921884f9E4176737C052c @ http://localhost:5173/src/App.jsx:90
+[   15159ms] [LOG] 👷 Worker: 0x0000000000000000000000000000000000000000 @ http://localhost:5173/src/App.jsx:91
+[   15160ms] [LOG] 💰 Amount: 1.0 @ http://localhost:5173/src/App.jsx:92
+[   15160ms] [LOG] 📊 Status: 0 @ http://localhost:5173/src/App.jsx:93
+[   69568ms] [LOG] 🔥 ticketAddresses: Proxy(_Result) @ http://localhost:5173/src/App.jsx:117
+[   69582ms] [LOG] 📦 Ticket: 0xCafac3dD18aC6c6e92c921884f9E4176737C052c @ http://localhost:5173/src/App.jsx:90
+[   69582ms] [LOG] 👷 Worker: 0x0000000000000000000000000000000000000000 @ http://localhost:5173/src/App.jsx:91
+[   69582ms] [LOG] 💰 Amount: 1.0 @ http://localhost:5173/src/App.jsx:92
+[   69583ms] [LOG] 📊 Status: 0 @ http://localhost:5173/src/App.jsx:93
+[   69590ms] [LOG] 📦 Ticket: 0x9f1ac54BEF0DD2f6f3462EA0fa94fC62300d3a8e @ http://localhost:5173/src/App.jsx:90
+[   69590ms] [LOG] 👷 Worker: 0x0000000000000000000000000000000000000000 @ http://localhost:5173/src/App.jsx:91
+[   69590ms] [LOG] 💰 Amount: 0.5 @ http://localhost:5173/src/App.jsx:92
+[   69590ms] [LOG] 📊 Status: 0 @ http://localhost:5173/src/App.jsx:93

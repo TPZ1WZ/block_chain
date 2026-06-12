@@ -1,0 +1,60 @@
+[    1682ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=adde1ff5:20102
+[   35558ms] [LOG] 🔥 ticketAddresses: Proxy(_Result) @ http://localhost:5173/src/App.jsx:117
+[   35584ms] [LOG] 📦 Ticket: 0xCafac3dD18aC6c6e92c921884f9E4176737C052c @ http://localhost:5173/src/App.jsx:90
+[   35585ms] [LOG] 👷 Worker: 0x0000000000000000000000000000000000000000 @ http://localhost:5173/src/App.jsx:91
+[   35585ms] [LOG] 💰 Amount: 1.0 @ http://localhost:5173/src/App.jsx:92
+[   35585ms] [LOG] 📊 Status: 0 @ http://localhost:5173/src/App.jsx:93
+[   69460ms] [LOG] Current address: 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 @ http://localhost:5173/src/components/TicketDetail.jsx:31
+[   69460ms] [LOG] Company: 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 @ http://localhost:5173/src/components/TicketDetail.jsx:32
+[   69462ms] [LOG] Current address: 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 @ http://localhost:5173/src/components/TicketDetail.jsx:31
+[   69463ms] [LOG] Company: 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 @ http://localhost:5173/src/components/TicketDetail.jsx:32
+[   69560ms] [LOG] 🔥 ticketAddresses: Proxy(_Result) @ http://localhost:5173/src/App.jsx:117
+[   69583ms] [LOG] 📦 Ticket: 0xCafac3dD18aC6c6e92c921884f9E4176737C052c @ http://localhost:5173/src/App.jsx:90
+[   69583ms] [LOG] 👷 Worker: 0x0000000000000000000000000000000000000000 @ http://localhost:5173/src/App.jsx:91
+[   69583ms] [LOG] 💰 Amount: 1.0 @ http://localhost:5173/src/App.jsx:92
+[   69584ms] [LOG] 📊 Status: 0 @ http://localhost:5173/src/App.jsx:93
+[   69584ms] [ERROR] loadTickets failed: TypeError: Do not know how to serialize a BigInt
+    at JSON.stringify (<anonymous>)
+    at http://localhost:5173/src/App.jsx:127:35 @ http://localhost:5173/src/App.jsx:131
+[  159265ms] [LOG] 🔥 ticketAddresses: Proxy(_Result) @ http://localhost:5173/src/App.jsx:117
+[  159293ms] [LOG] 📦 Ticket: 0xCafac3dD18aC6c6e92c921884f9E4176737C052c @ http://localhost:5173/src/App.jsx:90
+[  159293ms] [LOG] 👷 Worker: 0x0000000000000000000000000000000000000000 @ http://localhost:5173/src/App.jsx:91
+[  159293ms] [LOG] 💰 Amount: 1.0 @ http://localhost:5173/src/App.jsx:92
+[  159293ms] [LOG] 📊 Status: 0 @ http://localhost:5173/src/App.jsx:93
+[  159306ms] [LOG] 📦 Ticket: 0x9f1ac54BEF0DD2f6f3462EA0fa94fC62300d3a8e @ http://localhost:5173/src/App.jsx:90
+[  159306ms] [LOG] 👷 Worker: 0x0000000000000000000000000000000000000000 @ http://localhost:5173/src/App.jsx:91
+[  159306ms] [LOG] 💰 Amount: 0.5 @ http://localhost:5173/src/App.jsx:92
+[  159306ms] [LOG] 📊 Status: 0 @ http://localhost:5173/src/App.jsx:93
+[  159306ms] [ERROR] loadTickets failed: TypeError: Do not know how to serialize a BigInt
+    at JSON.stringify (<anonymous>)
+    at http://localhost:5173/src/App.jsx:127:35 @ http://localhost:5173/src/App.jsx:131
+[  191004ms] [LOG] 📦 Ticket: 0xCafac3dD18aC6c6e92c921884f9E4176737C052c @ http://localhost:5173/src/App.jsx:90
+[  191004ms] [LOG] 👷 Worker: 0x0000000000000000000000000000000000000000 @ http://localhost:5173/src/App.jsx:91
+[  191004ms] [LOG] 💰 Amount: 0.0 @ http://localhost:5173/src/App.jsx:92
+[  191004ms] [LOG] 📊 Status: 6 @ http://localhost:5173/src/App.jsx:93
+[  191016ms] [LOG] 🔥 ticketAddresses: Proxy(_Result) @ http://localhost:5173/src/App.jsx:117
+[  191024ms] [LOG] 🔥 ticketAddresses: Proxy(_Result) @ http://localhost:5173/src/App.jsx:117
+[  191037ms] [LOG] 📦 Ticket: 0xCafac3dD18aC6c6e92c921884f9E4176737C052c @ http://localhost:5173/src/App.jsx:90
+[  191037ms] [LOG] 👷 Worker: 0x0000000000000000000000000000000000000000 @ http://localhost:5173/src/App.jsx:91
+[  191037ms] [LOG] 💰 Amount: 0.0 @ http://localhost:5173/src/App.jsx:92
+[  191037ms] [LOG] 📊 Status: 6 @ http://localhost:5173/src/App.jsx:93
+[  191052ms] [LOG] 📦 Ticket: 0x9f1ac54BEF0DD2f6f3462EA0fa94fC62300d3a8e @ http://localhost:5173/src/App.jsx:90
+[  191052ms] [LOG] 👷 Worker: 0x0000000000000000000000000000000000000000 @ http://localhost:5173/src/App.jsx:91
+[  191052ms] [LOG] 💰 Amount: 0.5 @ http://localhost:5173/src/App.jsx:92
+[  191052ms] [LOG] 📊 Status: 0 @ http://localhost:5173/src/App.jsx:93
+[  191052ms] [ERROR] loadTickets failed: TypeError: Do not know how to serialize a BigInt
+    at JSON.stringify (<anonymous>)
+    at http://localhost:5173/src/App.jsx:127:35
+    at async http://localhost:5173/src/App.jsx:173:7
+    at async handle (http://localhost:5173/src/components/TicketDetail.jsx:68:7) @ http://localhost:5173/src/App.jsx:131
+[  191068ms] [LOG] 📦 Ticket: 0xCafac3dD18aC6c6e92c921884f9E4176737C052c @ http://localhost:5173/src/App.jsx:90
+[  191068ms] [LOG] 👷 Worker: 0x0000000000000000000000000000000000000000 @ http://localhost:5173/src/App.jsx:91
+[  191068ms] [LOG] 💰 Amount: 0.0 @ http://localhost:5173/src/App.jsx:92
+[  191068ms] [LOG] 📊 Status: 6 @ http://localhost:5173/src/App.jsx:93
+[  191082ms] [LOG] 📦 Ticket: 0x9f1ac54BEF0DD2f6f3462EA0fa94fC62300d3a8e @ http://localhost:5173/src/App.jsx:90
+[  191082ms] [LOG] 👷 Worker: 0x0000000000000000000000000000000000000000 @ http://localhost:5173/src/App.jsx:91
+[  191082ms] [LOG] 💰 Amount: 0.5 @ http://localhost:5173/src/App.jsx:92
+[  191082ms] [LOG] 📊 Status: 0 @ http://localhost:5173/src/App.jsx:93
+[  191082ms] [ERROR] loadTickets failed: TypeError: Do not know how to serialize a BigInt
+    at JSON.stringify (<anonymous>)
+    at http://localhost:5173/src/App.jsx:127:35 @ http://localhost:5173/src/App.jsx:131

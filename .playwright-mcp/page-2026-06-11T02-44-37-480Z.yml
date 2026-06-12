@@ -1,0 +1,93 @@
+- generic [ref=e4]:
+  - paragraph [ref=e8]:
+    - text: "TicketBoard: 0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512"
+    - text: "MultiSig: 0x5FbDB2315678afecb367f032d93F642f64180aa3"
+    - text: "Chain ID: 31337"
+  - banner [ref=e9]:
+    - heading "TrustLance Ticket Platform" [level=1] [ref=e10]
+    - generic [ref=e11]: 0x7099...79C8
+  - generic [ref=e12]:
+    - heading "🎫 Create Ticket" [level=3] [ref=e13]
+    - generic [ref=e14]:
+      - generic [ref=e15]: Ticket Title
+      - textbox "E.g. Visit branch and take product display photos" [ref=e16]
+    - generic [ref=e17]:
+      - generic [ref=e18]: Details CID / Reference
+      - textbox "ipfs://..." [ref=e19]
+    - generic [ref=e20]:
+      - generic [ref=e21]: Reward Amount (ETH)
+      - textbox [ref=e22]: "0.1"
+    - generic [ref=e23]:
+      - generic [ref=e24]: Deadline (UTC)
+      - generic [ref=e25]:
+        - spinbutton [ref=e26]: "2026"
+        - spinbutton [ref=e27]: "6"
+        - spinbutton [ref=e28]: "11"
+        - spinbutton [ref=e29]: "3"
+        - spinbutton [ref=e30]: "43"
+        - spinbutton [ref=e31]: "0"
+      - paragraph [ref=e32]: "On-chain UTC: Thu, 11 Jun 2026 03:43:00 GMT"
+    - button "Create Ticket & Lock ETH" [ref=e33] [cursor=pointer]
+  - generic [ref=e34]:
+    - generic [ref=e35]:
+      - heading "Ticket Board" [level=2] [ref=e37]
+      - generic [ref=e38]:
+        - generic [ref=e39]:
+          - heading "🎫 Ticket Board" [level=2] [ref=e40]
+          - generic [ref=e41]: 2 tickets
+        - generic [ref=e42]:
+          - generic [ref=e43]:
+            - generic [ref=e44]:
+              - generic [ref=e45]:
+                - text: 🆕 Open
+                - heading "Demo Ticket - Install POSM" [level=3] [ref=e46]
+              - generic [ref=e47]: 1.0 ETH
+            - paragraph [ref=e48]: 🎟 0xCafac3...7C052c
+            - generic [ref=e49]:
+              - paragraph [ref=e50]: "🏢 Company: 0xf39F...2266"
+              - paragraph [ref=e51]: "👷 Worker: Unclaimed"
+              - paragraph [ref=e52]: 📅 6/18/2026 9:41:09 AM
+            - button "View Detail →" [ref=e53] [cursor=pointer]
+          - generic [ref=e54]:
+            - generic [ref=e55]:
+              - generic [ref=e56]:
+                - text: 🎯 Claimed
+                - heading "Chup anh ke hang sieu thi ABC" [level=3] [ref=e57]
+              - generic [ref=e58]: 0.5 ETH
+            - paragraph [ref=e59]: 🎟 0x9f1ac5...0d3a8e
+            - generic [ref=e60]:
+              - paragraph [ref=e61]: "🏢 Company: 0xf39F...2266"
+              - paragraph [ref=e62]: "👷 Worker: 0x7099...79C8"
+              - paragraph [ref=e63]: 📅 6/25/2026 10:42:00 AM
+            - button "View Detail →" [ref=e64] [cursor=pointer]
+    - generic [ref=e67]:
+      - heading "🎫 Ticket Detail" [level=2] [ref=e69]
+      - generic [ref=e70]:
+        - generic [ref=e72]: 🎯 Claimed
+        - generic [ref=e73]:
+          - generic [ref=e74]:
+            - generic [ref=e75]: 📝 Title
+            - paragraph [ref=e76]: Chup anh ke hang sieu thi ABC
+          - generic [ref=e77]:
+            - generic [ref=e78]: 🏢 Company
+            - generic [ref=e79]: 0xf39F...2266
+          - generic [ref=e80]:
+            - generic [ref=e81]: 👷 Worker
+            - generic [ref=e82]: 0x7099...79C8
+          - generic [ref=e83]:
+            - generic [ref=e84]: 💰 Reward
+            - generic [ref=e85]: 0.5 ETH
+          - generic [ref=e86]:
+            - generic [ref=e87]: 🔗 Details CID
+            - paragraph [ref=e88]: ipfs://QmABC123
+          - generic [ref=e89]:
+            - generic [ref=e90]: 📅 Deadline
+            - generic [ref=e91]: 6/25/2026, 10:42:00 AM
+          - generic [ref=e92]:
+            - generic [ref=e93]: ⛓ Chain time
+            - generic [ref=e94]: 6/11/2026, 9:42:52 AM
+        - generic [ref=e97]:
+          - heading "📤 Submit Proof" [level=3] [ref=e98]
+          - textbox "ipfs://proof-cid" [ref=e99]
+          - textbox "Describe what was completed..." [ref=e100]
+          - button "📤 Submit Proof" [ref=e101] [cursor=pointer]

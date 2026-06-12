@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Skill(run)",
+      "Skill(run:*)",
+      "PowerShell(cd \"c:\\\\Users\\\\as\\\\Downloads\\\\freelancetrust-ticket-escrow-main\\\\freelancetrust-ticket-escrow-main\\\\Dapp_TrustLance-main\" && Start-Process powershell -ArgumentList '-NoExit', '-Command', 'npx hardhat node' -WindowStyle Normal)"
+    ]
+  }
+}
