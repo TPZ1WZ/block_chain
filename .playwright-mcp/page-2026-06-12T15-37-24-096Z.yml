@@ -1,0 +1,176 @@
+- generic [ref=e4]:
+  - complementary [ref=e5]:
+    - generic [ref=e6]:
+      - generic [ref=e7]:
+        - img [ref=e9]
+        - generic [ref=e12]:
+          - heading "OpenTask" [level=1] [ref=e13]
+          - paragraph [ref=e14]: Ký quỹ Web3
+      - navigation [ref=e15]:
+        - button "Tổng quan" [ref=e16] [cursor=pointer]:
+          - generic [ref=e18]:
+            - img [ref=e19]
+            - generic [ref=e24]: Tổng quan
+        - button "Tạo Ticket" [ref=e25] [cursor=pointer]:
+          - generic [ref=e26]:
+            - img [ref=e27]
+            - generic [ref=e29]: Tạo Ticket
+        - button "Bảng Ticket" [ref=e30] [cursor=pointer]:
+          - generic [ref=e31]:
+            - img [ref=e32]
+            - generic [ref=e34]: Bảng Ticket
+        - button "Ticket của tôi" [ref=e35] [cursor=pointer]:
+          - generic [ref=e36]:
+            - img [ref=e37]
+            - generic [ref=e41]: Ticket của tôi
+        - button "Ví của tôi" [ref=e42] [cursor=pointer]:
+          - generic [ref=e43]:
+            - img [ref=e44]
+            - generic [ref=e47]: Ví của tôi
+        - button "Lịch sử" [ref=e48] [cursor=pointer]:
+          - generic [ref=e49]:
+            - img [ref=e50]
+            - generic [ref=e53]: Lịch sử
+        - button "Hướng dẫn" [ref=e54] [cursor=pointer]:
+          - generic [ref=e55]:
+            - img [ref=e56]
+            - generic [ref=e58]: Hướng dẫn
+        - button "Cài đặt" [ref=e59] [cursor=pointer]:
+          - generic [ref=e60]:
+            - img [ref=e61]
+            - generic [ref=e64]: Cài đặt
+      - generic [ref=e65]:
+        - generic [ref=e66]:
+          - img [ref=e68]
+          - generic [ref=e71]:
+            - paragraph [ref=e72]: Ví của tôi
+            - paragraph [ref=e73]: Chưa kết nối
+        - generic [ref=e74]:
+          - generic [ref=e75]:
+            - paragraph [ref=e76]: Số dư
+            - paragraph [ref=e77]: 0 ETH
+          - button "Kết nối" [ref=e78] [cursor=pointer]
+  - generic [ref=e79]:
+    - banner [ref=e80]:
+      - generic [ref=e82]:
+        - paragraph [ref=e83]: OpenTask
+        - paragraph [ref=e84]: Bảng điều khiển ký quỹ Web3
+      - generic [ref=e85]:
+        - button "Hardhat Local" [ref=e86] [cursor=pointer]:
+          - img [ref=e88]
+          - text: Hardhat Local
+          - img [ref=e93]
+        - button "Notifications" [ref=e95] [cursor=pointer]:
+          - img [ref=e96]
+        - button "Kết nối ví" [ref=e99] [cursor=pointer]:
+          - img [ref=e100]
+          - text: Kết nối ví
+    - main [ref=e103]:
+      - generic [ref=e104]:
+        - generic [ref=e105]:
+          - generic [ref=e108]:
+            - generic [ref=e109]:
+              - generic [ref=e110]: Phi tập trung • Minh bạch • Không cần trung gian
+              - heading "OpenTask cho giao nhận công việc phi tập trung bằng Smart Contract Escrow" [level=2] [ref=e112]
+              - paragraph [ref=e113]: Tạo ticket, khóa ETH, nhận việc, nộp minh chứng và giải ngân bằng logic on-chain minh bạch, không cần trung gian.
+            - generic [ref=e114]:
+              - generic [ref=e115]:
+                - generic [ref=e116]:
+                  - paragraph [ref=e117]: Tổng ticket
+                  - img [ref=e118]
+                - paragraph [ref=e120]: "0"
+              - generic [ref=e121]:
+                - generic [ref=e122]:
+                  - paragraph [ref=e123]: Đang mở
+                  - img [ref=e124]
+                - paragraph [ref=e127]: "0"
+              - generic [ref=e128]:
+                - generic [ref=e129]:
+                  - paragraph [ref=e130]: Đang làm
+                  - img [ref=e131]
+                - paragraph [ref=e134]: "0"
+              - generic [ref=e135]:
+                - generic [ref=e136]:
+                  - paragraph [ref=e137]: Tranh chấp
+                  - img [ref=e138]
+                - paragraph [ref=e142]: "0"
+          - generic [ref=e143]:
+            - generic [ref=e144]:
+              - img [ref=e146]
+              - heading "Ký quỹ an toàn" [level=3] [ref=e149]
+              - paragraph [ref=e150]: ETH được giữ bởi Smart Contract.
+            - generic [ref=e151]:
+              - img [ref=e153]
+              - heading "Thanh toán tự động" [level=3] [ref=e156]
+              - paragraph [ref=e157]: Giải ngân sau khi xác nhận.
+            - generic [ref=e158]:
+              - img [ref=e160]
+              - heading "Minh bạch on-chain" [level=3] [ref=e163]
+              - paragraph [ref=e164]: Ticket và trạng thái rõ ràng.
+            - generic [ref=e165]:
+              - img [ref=e167]
+              - heading "Không trung gian" [level=3] [ref=e170]
+              - paragraph [ref=e171]: Tương tác trực tiếp qua ví.
+          - generic [ref=e172]:
+            - generic [ref=e174]:
+              - img [ref=e176]
+              - generic [ref=e180]:
+                - paragraph [ref=e181]: Bước 1
+                - paragraph [ref=e182]: Tạo Ticket & Ký quỹ ETH
+            - generic [ref=e183]:
+              - img [ref=e185]
+              - generic [ref=e190]:
+                - paragraph [ref=e191]: Bước 2
+                - paragraph [ref=e192]: Nhận việc & Thực hiện
+            - generic [ref=e193]:
+              - img [ref=e195]
+              - generic [ref=e198]:
+                - paragraph [ref=e199]: Bước 3
+                - paragraph [ref=e200]: Nộp proof & Xác nhận
+            - generic [ref=e201]:
+              - img [ref=e203]
+              - generic [ref=e206]:
+                - paragraph [ref=e207]: Bước 4
+                - paragraph [ref=e208]: Giải ngân bằng Smart Contract
+        - generic [ref=e209]:
+          - generic [ref=e210]:
+            - generic [ref=e211]:
+              - generic [ref=e212]:
+                - generic [ref=e213]:
+                  - img [ref=e214]
+                  - text: Bảng Ticket
+                - heading "Ticket mới nhất" [level=2] [ref=e216]
+              - button "Mới nhất" [ref=e217] [cursor=pointer]:
+                - img [ref=e218]
+                - text: Mới nhất
+            - generic [ref=e219]:
+              - img [ref=e221]
+              - paragraph [ref=e223]: Chưa có ticket nào
+              - paragraph [ref=e224]: Chưa có ticket nào trên hệ thống.
+          - complementary [ref=e225]:
+            - generic [ref=e226]:
+              - generic [ref=e227]:
+                - generic [ref=e228]:
+                  - paragraph [ref=e229]: Ví
+                  - heading "Ví của tôi" [level=3] [ref=e230]
+                - img [ref=e232]
+              - generic [ref=e235]:
+                - paragraph [ref=e236]: Số dư
+                - paragraph [ref=e237]: "0"
+                - paragraph [ref=e238]: ETH
+              - generic [ref=e239]:
+                - generic [ref=e240]:
+                  - generic [ref=e241]: Địa chỉ ví
+                  - generic [ref=e242]:
+                    - generic [ref=e243]: Chưa kết nối
+                    - img [ref=e244]
+                - generic [ref=e247]:
+                  - generic [ref=e248]: Mạng
+                  - generic [ref=e249]: Hardhat Local
+              - button "Kết nối ví" [ref=e250] [cursor=pointer]:
+                - img [ref=e251]
+                - text: Kết nối ví
+            - generic [ref=e255]:
+              - img [ref=e257]
+              - heading "Chi tiết Ticket" [level=3] [ref=e259]
+              - paragraph [ref=e260]: Chọn một ticket trên bảng để xem chi tiết, nhận việc, nộp minh chứng hoặc xử lý thanh toán.

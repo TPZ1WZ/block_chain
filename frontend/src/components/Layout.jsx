@@ -12,6 +12,7 @@ export default function Layout({
   onConnect,
   networkName,
   walletError,
+  notifications,
 }) {
   return (
     <div className="min-h-screen bg-[#F6F8FF] text-[#071127]">
@@ -41,6 +42,7 @@ export default function Layout({
             isConnected={isConnected}
             walletError={walletError}
             onConnect={onConnect}
+            notifications={notifications}
           />
 
           <motion.main

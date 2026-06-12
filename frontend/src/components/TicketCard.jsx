@@ -56,10 +56,21 @@ export default function TicketCard({
               : shortAddress(ticket.worker)}
           </span>
         </div>
-        <div className="flex items-center gap-2 pt-1">
-          <Clock className="h-4 w-4 text-blue-400" />
-          <span>{formatUnixDate(ticket.deadline)}</span>
-        </div>
+        {(() => {
+          const now = Math.floor(Date.now() / 1000);
+          const diff = ticket.deadline - now;
+          const isExpired = diff < 0;
+          const isUrgent = diff >= 0 && diff < 48 * 3600;
+          return (
+            <div className={`flex items-center gap-2 rounded-xl px-2 py-1.5 pt-1 ${isExpired ? "bg-red-50" : isUrgent ? "bg-orange-50" : ""}`}>
+              <Clock className={`h-4 w-4 ${isExpired ? "text-red-500" : isUrgent ? "text-orange-500" : "text-blue-400"}`} />
+              <span className={isExpired ? "font-black text-red-600" : isUrgent ? "font-black text-orange-600" : ""}>
+                {isExpired ? "⚠ Hết hạn — " : isUrgent ? "⏰ Sắp hết — " : ""}
+                {formatUnixDate(ticket.deadline)}
+              </span>
+            </div>
+          );
+        })()}
       </div>
 
       <div className="mt-4 grid grid-cols-2 gap-3">

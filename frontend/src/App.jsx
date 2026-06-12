@@ -13,13 +13,16 @@ import {
 
 import Layout from "./components/Layout";
 import CreateTicketForm from "./components/CreateTicketForm";
+import FeatureCards from "./components/FeatureCards";
+import FlowSteps from "./components/FlowSteps";
 import HeroSection from "./components/HeroSection";
 import TicketBoard from "./components/TicketBoard";
 import TicketDetailPanel from "./components/TicketDetailPanel";
 import WalletCard from "./components/WalletCard";
 import { getMultiSig, getTicketBoard, getTicketEscrow } from "./lib/contracts";
 import { CHAIN_ID, MULTISIG_ADDRESS, TICKET_BOARD_ADDRESS } from "./config";
-import { formatEth } from "./utils/format";
+import { formatEth, formatUnixDate, shortAddress } from "./utils/format";
+import { getStatusMeta } from "./utils/status";
 
 function normalizeError(error) {
   return (
@@ -301,7 +304,12 @@ export default function App() {
 
   function renderPage() {
     const commonBoardProps = {
-      onSelect: setSelectedTicket,
+      onSelect: (ticket) => {
+        setSelectedTicket(ticket);
+        setTimeout(() => {
+          document.getElementById("ticket-detail-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+        }, 80);
+      },
       selectedTicket,
       address,
       loading: loadingTickets,
@@ -338,20 +346,23 @@ export default function App() {
 
     if (activePage === "board") {
       return (
-        <section className="grid grid-cols-1 gap-7 xl:grid-cols-[minmax(0,1fr)_320px]">
+        <section className="grid grid-cols-1 gap-7 lg:grid-cols-[minmax(0,1fr)_360px]">
           <TicketBoard
             tickets={tickets}
             activeTab={boardTab}
             onTabChange={setBoardTab}
+            onCreateTicket={() => setActivePage("create")}
             {...commonBoardProps}
           />
-          <TicketDetailPanel
-            ticket={selectedTicket}
-            address={address}
-            arbiters={arbiters}
-            disabled={!isConnected || txState.stage !== "idle"}
-            onAction={ticketAction}
-          />
+          <div id="ticket-detail-panel">
+            <TicketDetailPanel
+              ticket={selectedTicket}
+              address={address}
+              arbiters={arbiters}
+              disabled={!isConnected || txState.stage !== "idle"}
+              onAction={ticketAction}
+            />
+          </div>
         </section>
       );
     }
@@ -398,13 +409,95 @@ export default function App() {
     }
 
     if (activePage === "history") {
+      const myTickets = tickets.filter(
+        (t) =>
+          t.company.toLowerCase() === address.toLowerCase() ||
+          (t.worker && t.worker !== "0x0000000000000000000000000000000000000000" && t.worker.toLowerCase() === address.toLowerCase())
+      );
       return (
-        <InfoPanel
-          icon={History}
-          title="Lịch sử giao dịch"
-          description="Chưa có giao dịch nào được ghi nhận trong giao diện. MetaMask vẫn có thể hiển thị lịch sử ký giao dịch riêng."
-          items={[]}
-        />
+        <section className="space-y-4">
+          <div className="rounded-[32px] border border-[#E6EAF5] bg-white/82 p-6 shadow-[0_24px_80px_rgba(15,23,42,0.07)] backdrop-blur-xl md:p-7">
+            <div className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">
+              <History className="h-3.5 w-3.5" />
+              Lịch sử
+            </div>
+            <h2 className="mt-3 text-2xl font-black text-slate-950">Lịch sử giao dịch</h2>
+            <p className="mt-1 text-sm text-slate-500">Các ticket bạn đã tạo hoặc tham gia với ví <span className="font-mono font-bold text-slate-700">{shortAddress(address)}</span></p>
+          </div>
+          {!isConnected ? (
+            <div className="rounded-3xl border border-dashed border-[#E6EAF5] bg-slate-50/80 p-12 text-center">
+              <History className="mx-auto mb-3 h-10 w-10 text-slate-300" />
+              <p className="font-bold text-slate-500">Kết nối ví để xem lịch sử</p>
+            </div>
+          ) : myTickets.length === 0 ? (
+            <div className="rounded-3xl border border-dashed border-[#E6EAF5] bg-slate-50/80 p-12 text-center">
+              <History className="mx-auto mb-3 h-10 w-10 text-slate-300" />
+              <p className="font-bold text-slate-500">Chưa có giao dịch nào</p>
+              <p className="mt-1 text-sm text-slate-400">Tạo ticket hoặc nhận việc để bắt đầu</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {myTickets.map((t) => {
+                const st = getStatusMeta(t.status);
+                const isCompany = t.company.toLowerCase() === address.toLowerCase();
+                return (
+                  <div
+                    key={t.address}
+                    onClick={() => { setSelectedTicket(t); setActivePage("board"); }}
+                    className="flex cursor-pointer items-center justify-between gap-4 rounded-2xl border border-[#E6EAF5] bg-white px-5 py-4 shadow-sm transition hover:border-blue-200 hover:shadow-md"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-lg">
+                        {isCompany ? "🏢" : "👷"}
+                      </div>
+                      <div>
+                        <p className="font-black text-slate-900">{t.title}</p>
+                        <p className="text-xs text-slate-400">{isCompany ? "Người tạo" : "Worker"} • {formatUnixDate(t.createdAt || t.deadline)}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-black ring-1 ${st.tone}`}>
+                        <span className={`h-2 w-2 rounded-full ${st.dot}`} />
+                        {st.label}
+                      </span>
+                      <span className="font-black text-emerald-600">{formatEth(t.amount)} ETH</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      );
+    }
+
+    if (activePage === "guide") {
+      return (
+        <section className="space-y-6">
+          <div className="rounded-[32px] border border-[#E6EAF5] bg-white/82 p-6 shadow-[0_24px_80px_rgba(15,23,42,0.07)] backdrop-blur-xl md:p-7">
+            <div className="inline-flex items-center gap-2 rounded-full bg-violet-50 px-3 py-1 text-xs font-bold text-violet-700">
+              📖 Hướng dẫn sử dụng
+            </div>
+            <h2 className="mt-3 text-2xl font-black text-slate-950">Hướng dẫn sử dụng OpenTask</h2>
+            <p className="mt-1 text-sm text-slate-500">Tìm hiểu cách hệ thống ký quỹ Web3 hoạt động và các bước thực hiện.</p>
+          </div>
+          <FeatureCards />
+          <FlowSteps />
+          <div className="rounded-[32px] border border-[#E6EAF5] bg-white/82 p-6 shadow-[0_24px_80px_rgba(15,23,42,0.07)] backdrop-blur-xl md:p-7 space-y-4">
+            <h3 className="text-lg font-black text-slate-950">❓ Câu hỏi thường gặp</h3>
+            {[
+              ["ETH bị khóa ở đâu?", "ETH được khóa trong Smart Contract Escrow — không ai có thể lấy ra nếu không đúng điều kiện, kể cả admin."],
+              ["Nếu Company không trả tiền thì sao?", "Worker có thể mở tranh chấp sau deadline. 3 arbiter sẽ bỏ phiếu độc lập, 2/3 quyết định người thắng."],
+              ["Arbiter là ai?", "Là 3 địa chỉ ví được cấu hình sẵn khi deploy contract, đóng vai trò trọng tài trung lập."],
+              ["Phí giao dịch là bao nhiêu?", "Chỉ phí gas của mạng Ethereum/Hardhat. Hệ thống không thu phí dịch vụ."],
+            ].map(([q, a]) => (
+              <div key={q} className="rounded-2xl border border-[#E6EAF5] bg-slate-50 p-4">
+                <p className="font-black text-slate-800">Q: {q}</p>
+                <p className="mt-1 text-sm text-slate-500">A: {a}</p>
+              </div>
+            ))}
+          </div>
+        </section>
       );
     }
 
@@ -458,6 +551,28 @@ export default function App() {
     );
   }
 
+  const notifications = useMemo(() => {
+    if (!address || !tickets.length) return [];
+    const now = Math.floor(Date.now() / 1000);
+    const result = [];
+    const addr = address.toLowerCase();
+    for (const t of tickets) {
+      // Worker: proof bị từ chối → cần nộp lại
+      if (t.status === 1 && t.rejectionReason && t.worker?.toLowerCase() === addr) {
+        result.push({ id: `reject-${t.address}`, icon: "⚠️", title: `Minh chứng bị từ chối`, body: `"${t.title}" — ${t.rejectionReason}` });
+      }
+      // Company: worker đã nộp proof → cần duyệt
+      if (t.status === 2 && t.company?.toLowerCase() === addr) {
+        result.push({ id: `submitted-${t.address}`, icon: "📋", title: `Worker đã nộp minh chứng`, body: `"${t.title}" — vui lòng xem xét và duyệt thanh toán` });
+      }
+      // Worker: đã nộp proof, deadline qua, company chưa phản hồi → có thể mở tranh chấp
+      if (t.status === 2 && t.deadline < now && t.worker?.toLowerCase() === addr) {
+        result.push({ id: `dispute-${t.address}`, icon: "⏰", title: `Deadline đã qua, có thể mở tranh chấp`, body: `"${t.title}" — Company chưa phản hồi` });
+      }
+    }
+    return result;
+  }, [address, tickets]);
+
   return (
     <Layout
       address={address}
@@ -468,6 +583,7 @@ export default function App() {
       onConnect={connectWallet}
       networkName={networkName}
       walletError={walletError}
+      notifications={notifications}
     >
       <AnimatePresence mode="wait">
         <motion.div

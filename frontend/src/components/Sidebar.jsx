@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import {
+  BookOpen,
   BriefcaseBusiness,
   Clock3,
   LayoutDashboard,
@@ -18,6 +19,7 @@ const menu = [
   { id: "myTickets", label: "Ticket của tôi", icon: BriefcaseBusiness },
   { id: "wallet", label: "Ví của tôi", icon: Wallet },
   { id: "history", label: "Lịch sử", icon: Clock3 },
+  { id: "guide", label: "Hướng dẫn", icon: BookOpen },
   { id: "settings", label: "Cài đặt", icon: Settings },
 ];
 

@@ -1,0 +1,123 @@
+- generic [ref=e4]:
+  - complementary [ref=e5]:
+    - generic [ref=e6]:
+      - generic [ref=e7]:
+        - img [ref=e9]
+        - generic [ref=e12]:
+          - heading "OpenTask" [level=1] [ref=e13]
+          - paragraph [ref=e14]: Ký quỹ Web3
+      - navigation [ref=e15]:
+        - button "Tổng quan" [ref=e16] [cursor=pointer]:
+          - generic [ref=e18]:
+            - img [ref=e19]
+            - generic [ref=e24]: Tổng quan
+        - button "Tạo Ticket" [active] [ref=e25] [cursor=pointer]:
+          - generic [ref=e26]:
+            - img [ref=e27]
+            - generic [ref=e29]: Tạo Ticket
+        - button "Bảng Ticket" [ref=e30] [cursor=pointer]:
+          - generic [ref=e31]:
+            - img [ref=e32]
+            - generic [ref=e34]: Bảng Ticket
+        - button "Ticket của tôi" [ref=e35] [cursor=pointer]:
+          - generic [ref=e36]:
+            - img [ref=e37]
+            - generic [ref=e41]: Ticket của tôi
+        - button "Ví của tôi" [ref=e42] [cursor=pointer]:
+          - generic [ref=e43]:
+            - img [ref=e44]
+            - generic [ref=e47]: Ví của tôi
+        - button "Lịch sử" [ref=e48] [cursor=pointer]:
+          - generic [ref=e49]:
+            - img [ref=e50]
+            - generic [ref=e53]: Lịch sử
+        - button "Cài đặt" [ref=e54] [cursor=pointer]:
+          - generic [ref=e55]:
+            - img [ref=e56]
+            - generic [ref=e59]: Cài đặt
+      - generic [ref=e60]:
+        - generic [ref=e61]:
+          - img [ref=e63]
+          - generic [ref=e66]:
+            - paragraph [ref=e67]: Ví của tôi
+            - paragraph [ref=e68]: 0xf39F...2266
+        - generic [ref=e70]:
+          - paragraph [ref=e71]: Số dư
+          - paragraph [ref=e72]: 9,998.9922 ETH
+  - generic [ref=e74]:
+    - banner [ref=e75]:
+      - generic [ref=e77]:
+        - paragraph [ref=e78]: OpenTask
+        - paragraph [ref=e79]: Bảng điều khiển ký quỹ Web3
+      - generic [ref=e80]:
+        - button "Hardhat Local" [ref=e81] [cursor=pointer]:
+          - img [ref=e83]
+          - text: Hardhat Local
+          - img [ref=e88]
+        - button "Notifications" [ref=e90] [cursor=pointer]:
+          - img [ref=e91]
+        - generic [ref=e258]: 0xf39F...2266
+    - main [ref=e98]:
+      - generic [ref=e426]:
+        - generic [ref=e427]:
+          - generic [ref=e428]:
+            - paragraph [ref=e429]: OpenTask
+            - heading "Tạo Ticket mới" [level=2] [ref=e430]
+            - paragraph [ref=e431]: Nhập thông tin công việc, khóa ETH vào Smart Contract Escrow và chờ Worker nhận việc.
+          - generic [ref=e432]:
+            - generic [ref=e434]:
+              - generic [ref=e435]:
+                - img [ref=e436]
+                - text: Ticket ký quỹ
+              - heading "Tạo Ticket mới" [level=2] [ref=e439]
+              - paragraph [ref=e440]: Ký quỹ sẽ được giữ trong Smart Contract Escrow và chỉ được giải ngân khi hoàn thành & xác nhận.
+            - generic [ref=e441]:
+              - generic [ref=e442]:
+                - text: Tiêu đề công việc
+                - generic [ref=e443]:
+                  - img [ref=e444]
+                  - textbox "Tiêu đề công việc" [ref=e447]:
+                    - /placeholder: "Ví dụ: Thiết kế website landing page"
+              - generic [ref=e448]:
+                - generic [ref=e449]: Mô tả / Tham chiếu công việc (lưu on-chain)
+                - textbox "Mô tả / Tham chiếu công việc (lưu on-chain) Nội dung này được lưu trực tiếp vào Smart Contract — hiển thị cho Worker khi xem ticket." [ref=e450]:
+                  - /placeholder: "Mô tả yêu cầu, tiêu chí nghiệm thu... hoặc dán link IPFS: ipfs://Qm..."
+                - paragraph [ref=e451]: Nội dung này được lưu trực tiếp vào Smart Contract — hiển thị cho Worker khi xem ticket.
+              - generic [ref=e452]:
+                - generic [ref=e453]:
+                  - text: Số tiền thưởng ETH
+                  - generic [ref=e454]:
+                    - textbox "Số tiền thưởng ETH ETH" [ref=e455]: "0.1"
+                    - generic [ref=e456]: ETH
+                - generic [ref=e457]:
+                  - text: Thời hạn UTC
+                  - generic [ref=e458]:
+                    - img [ref=e459]
+                    - textbox "Thời hạn UTC" [ref=e461]: 2026-06-19T15:10
+              - generic [ref=e462]: "Thời gian on-chain UTC: Fri, 19 Jun 2026 08:10:00 GMT"
+              - button "Tạo Ticket & Khóa ETH" [ref=e463] [cursor=pointer]:
+                - img [ref=e464]
+                - text: Tạo Ticket & Khóa ETH
+        - complementary [ref=e468]:
+          - generic [ref=e469]:
+            - heading "Hướng dẫn ký quỹ ETH" [level=3] [ref=e470]
+            - paragraph [ref=e471]: Khi tạo ticket, ETH được khóa trong Smart Contract Escrow. Khoản ký quỹ chỉ được trả cho Worker khi bạn duyệt thanh toán hoặc được xử lý qua cơ chế tranh chấp.
+          - generic [ref=e472]:
+            - generic [ref=e473]:
+              - generic [ref=e474]:
+                - paragraph [ref=e475]: Ví
+                - heading "Ví của tôi" [level=3] [ref=e476]
+              - img [ref=e478]
+            - generic [ref=e481]:
+              - paragraph [ref=e482]: Số dư
+              - paragraph [ref=e483]: 9,998.9922
+              - paragraph [ref=e484]: ETH
+            - generic [ref=e485]:
+              - generic [ref=e486]:
+                - generic [ref=e487]: Địa chỉ ví
+                - generic [ref=e488]:
+                  - generic [ref=e489]: 0xf39F...2266
+                  - img [ref=e490]
+              - generic [ref=e493]:
+                - generic [ref=e494]: Mạng
+                - generic [ref=e495]: Hardhat Local

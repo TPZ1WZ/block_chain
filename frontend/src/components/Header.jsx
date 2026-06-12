@@ -1,5 +1,6 @@
-import { motion } from "framer-motion";
-import { Bell, ChevronDown, Menu, Network, Wallet } from "lucide-react";
+import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Bell, ChevronDown, Menu, Network, Wallet, X } from "lucide-react";
 import { shortAddress } from "../utils/format";
 
 export default function Header({
@@ -8,7 +9,13 @@ export default function Header({
   isConnected,
   walletError,
   onConnect,
+  notifications = [],
 }) {
+  const [showNotifs, setShowNotifs] = useState(false);
+  const [dismissed, setDismissed] = useState([]);
+
+  const visible = notifications.filter((n) => !dismissed.includes(n.id));
+
   return (
     <motion.header
       className="sticky top-4 z-30 flex min-h-[68px] items-center justify-between gap-4 rounded-[24px] border border-[#E6EAF5]/90 bg-white/82 px-4 py-3 shadow-[0_18px_60px_rgba(15,23,42,0.08)] backdrop-blur-xl sm:px-5"
@@ -46,13 +53,64 @@ export default function Header({
           <ChevronDown className="h-4 w-4 text-slate-400" />
         </button>
 
-        <button
-          type="button"
-          className="grid h-11 w-11 place-items-center rounded-2xl border border-[#E6EAF5] bg-white/80 text-slate-500 shadow-sm transition hover:-translate-y-0.5 hover:text-blue-600 hover:shadow-md"
-          aria-label="Notifications"
-        >
-          <Bell className="h-5 w-5" />
-        </button>
+        {/* Bell with dropdown */}
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setShowNotifs((v) => !v)}
+            className="relative grid h-11 w-11 place-items-center rounded-2xl border border-[#E6EAF5] bg-white/80 text-slate-500 shadow-sm transition hover:-translate-y-0.5 hover:text-blue-600 hover:shadow-md"
+            aria-label="Notifications"
+          >
+            <Bell className="h-5 w-5" />
+            {visible.length > 0 && (
+              <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-[10px] font-black text-white shadow">
+                {visible.length}
+              </span>
+            )}
+          </button>
+
+          <AnimatePresence>
+            {showNotifs && (
+              <motion.div
+                initial={{ opacity: 0, y: 8, scale: 0.96 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 8, scale: 0.96 }}
+                transition={{ duration: 0.18 }}
+                className="absolute right-0 top-14 z-50 w-80 rounded-2xl border border-[#E6EAF5] bg-white shadow-[0_24px_60px_rgba(15,23,42,0.14)]"
+              >
+                <div className="flex items-center justify-between border-b border-[#E6EAF5] px-4 py-3">
+                  <p className="font-black text-slate-900">Thông báo</p>
+                  <button onClick={() => setShowNotifs(false)}>
+                    <X className="h-4 w-4 text-slate-400 hover:text-slate-700" />
+                  </button>
+                </div>
+                {visible.length === 0 ? (
+                  <div className="px-4 py-8 text-center text-sm text-slate-400">
+                    Không có thông báo mới
+                  </div>
+                ) : (
+                  <ul className="max-h-72 divide-y divide-[#F1F4FB] overflow-y-auto">
+                    {visible.map((n) => (
+                      <li key={n.id} className="flex items-start gap-3 px-4 py-3">
+                        <span className="mt-0.5 text-lg">{n.icon}</span>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-bold text-slate-800">{n.title}</p>
+                          <p className="text-xs text-slate-500">{n.body}</p>
+                        </div>
+                        <button
+                          onClick={() => setDismissed((d) => [...d, n.id])}
+                          className="shrink-0 text-slate-300 hover:text-slate-500"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
 
         {isConnected ? (
           <div className="flex items-center gap-2 rounded-2xl border border-[#E6EAF5] bg-white/90 px-3 py-2 shadow-sm">

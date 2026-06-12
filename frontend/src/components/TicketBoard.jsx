@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { SlidersHorizontal, Ticket } from "lucide-react";
+import { PlusCircle, SlidersHorizontal, Ticket } from "lucide-react";
 import TicketCard from "./TicketCard";
 
 const tabs = [
@@ -43,6 +43,7 @@ export default function TicketBoard({
   onTicketAction,
   showTabs = true,
   title = "Danh sách ticket",
+  onCreateTicket,
 }) {
   const filtered = filterTickets(tickets, activeTab, address);
 
@@ -123,9 +124,25 @@ export default function TicketBoard({
         </motion.div>
       ) : (
         <div className="mt-6 rounded-3xl border border-dashed border-[#E6EAF5] bg-slate-50/80 p-12 text-center">
-          <p className="text-sm font-bold text-slate-500">
-            Chưa có ticket phù hợp với bộ lọc hiện tại.
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50">
+            <Ticket className="h-7 w-7 text-blue-400" />
+          </div>
+          <p className="text-base font-black text-slate-700">Chưa có ticket nào</p>
+          <p className="mt-1 text-sm text-slate-400">
+            {activeTab === "all"
+              ? "Chưa có ticket nào trên hệ thống."
+              : "Không có ticket phù hợp với bộ lọc này."}
           </p>
+          {onCreateTicket && activeTab === "all" && (
+            <button
+              type="button"
+              onClick={onCreateTicket}
+              className="mt-5 inline-flex items-center gap-2 rounded-2xl bg-blue-600 px-5 py-2.5 text-sm font-black text-white shadow-sm transition hover:bg-blue-700"
+            >
+              <PlusCircle className="h-4 w-4" />
+              Tạo ticket đầu tiên
+            </button>
+          )}
         </div>
       )}
     </motion.section>

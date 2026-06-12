@@ -8,7 +8,6 @@ const defaultDeadline = () =>
 export default function CreateTicketForm({ disabled, isBusy, onCreate }) {
   const [form, setForm] = useState({
     title: "",
-    description: "",
     detailsCID: "",
     amount: "0.1",
     deadlineLocal: defaultDeadline(),
@@ -79,46 +78,34 @@ export default function CreateTicketForm({ disabled, isBusy, onCreate }) {
       </div>
 
       <form onSubmit={submit} className="space-y-5">
-        <div className="grid gap-4 lg:grid-cols-2">
-          <label className="space-y-2">
-            <span className="text-sm font-bold text-slate-700">
-              Tiêu đề công việc
-            </span>
-            <div className="flex min-h-12 items-center gap-3 rounded-2xl border border-[#E6EAF5] bg-white px-4 py-3 transition focus-within:border-blue-400 focus-within:ring-4 focus-within:ring-blue-100">
-              <FileText className="h-5 w-5 text-blue-500" />
-              <input
-                value={form.title}
-                onChange={(event) => update("title", event.target.value)}
-                placeholder="Ví dụ: Thiết kế website landing page"
-                className="w-full border-none bg-transparent text-sm font-medium text-slate-900 outline-none placeholder:text-slate-400"
-              />
-            </div>
-          </label>
-
-          <label className="space-y-2">
-            <span className="text-sm font-bold text-slate-700">
-              CID / Tham chiếu
-            </span>
+        <label className="space-y-2">
+          <span className="text-sm font-bold text-slate-700">
+            Tiêu đề công việc
+          </span>
+          <div className="flex min-h-12 items-center gap-3 rounded-2xl border border-[#E6EAF5] bg-white px-4 py-3 transition focus-within:border-blue-400 focus-within:ring-4 focus-within:ring-blue-100">
+            <FileText className="h-5 w-5 text-blue-500" />
             <input
-              value={form.detailsCID}
-              onChange={(event) => update("detailsCID", event.target.value)}
-              placeholder="ipfs://..."
-              className="min-h-12 w-full rounded-2xl border border-[#E6EAF5] bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+              value={form.title}
+              onChange={(event) => update("title", event.target.value)}
+              placeholder="Ví dụ: Thiết kế website landing page"
+              className="w-full border-none bg-transparent text-sm font-medium text-slate-900 outline-none placeholder:text-slate-400"
             />
-          </label>
-        </div>
+          </div>
+        </label>
 
         <label className="space-y-2">
           <span className="text-sm font-bold text-slate-700">
-            Mô tả chi tiết / Yêu cầu
+            Mô tả / Tham chiếu công việc{" "}
+            <span className="font-normal text-slate-400">(lưu on-chain)</span>
           </span>
           <textarea
-            value={form.description}
-            onChange={(event) => update("description", event.target.value)}
-            placeholder="Mô tả rõ yêu cầu công việc, tiêu chí nghiệm thu, deadline nội bộ..."
-            rows={5}
-            className="min-h-[120px] w-full resize-none rounded-2xl border border-[#E6EAF5] bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+            value={form.detailsCID}
+            onChange={(event) => update("detailsCID", event.target.value)}
+            placeholder="Mô tả yêu cầu, tiêu chí nghiệm thu... hoặc dán link IPFS: ipfs://Qm..."
+            rows={4}
+            className="min-h-[100px] w-full resize-none rounded-2xl border border-[#E6EAF5] bg-white px-4 py-3 text-sm font-medium text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
           />
+          <p className="text-xs text-slate-400">Nội dung này được lưu trực tiếp vào Smart Contract — hiển thị cho Worker khi xem ticket.</p>
         </label>
 
         <div className="grid gap-4 lg:grid-cols-2">

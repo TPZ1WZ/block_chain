@@ -1,6 +1,4 @@
 import { motion } from "framer-motion";
-import FeatureCards from "./FeatureCards";
-import FlowSteps from "./FlowSteps";
 import StatsCards from "./StatsCards";
 
 export default function HeroSection({ stats }) {
@@ -33,9 +31,6 @@ export default function HeroSection({ stats }) {
           <StatsCards stats={stats} />
         </div>
       </div>
-
-      <FeatureCards />
-      <FlowSteps />
     </section>
   );
 }
