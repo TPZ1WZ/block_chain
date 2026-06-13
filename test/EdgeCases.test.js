@@ -58,7 +58,7 @@ describe("Edge Cases & Security Tests", function () {
       await expect(
         directTicket
           .connect(company)
-          .init(company.address, deadline, TITLE, DETAILS_CID, {
+          ["init(address,uint256,string,string)"](company.address, deadline, TITLE, DETAILS_CID, {
             value: TICKET_VALUE,
           })
       ).to.be.revertedWith("Only factory");
@@ -82,12 +82,12 @@ describe("Edge Cases & Security Tests", function () {
       const block = await ethers.provider.getBlock("latest");
       const deadline = block.timestamp + 3 * ONE_DAY;
 
-      await directTicket.init(deployer.address, deadline, TITLE, DETAILS_CID, {
+      await directTicket["init(address,uint256,string,string)"](deployer.address, deadline, TITLE, DETAILS_CID, {
         value: TICKET_VALUE,
       });
 
       await expect(
-        directTicket.init(deployer.address, deadline + ONE_DAY, TITLE, DETAILS_CID, {
+        directTicket["init(address,uint256,string,string)"](deployer.address, deadline + ONE_DAY, TITLE, DETAILS_CID, {
           value: TICKET_VALUE,
         })
       ).to.be.revertedWith("Already initialized");

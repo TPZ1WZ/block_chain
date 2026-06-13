@@ -1,6 +1,15 @@
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { CalendarDays, FileText, Loader2, LockKeyhole, Sparkles } from "lucide-react";
+import { uploadFileToIPFS } from "../lib/ipfs";
+
+const categories = [
+  { id: 0, label: "Web design" },
+  { id: 1, label: "Smart contract" },
+  { id: 2, label: "Data analysis" },
+  { id: 3, label: "Content writing" },
+  { id: 4, label: "Translation" },
+];
 
 const defaultDeadline = () =>
   new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 16);
@@ -9,10 +18,13 @@ export default function CreateTicketForm({ disabled, isBusy, onCreate }) {
   const [form, setForm] = useState({
     title: "",
     detailsCID: "",
+    detailsFile: null,
+    category: 0,
     amount: "0.1",
     deadlineLocal: defaultDeadline(),
   });
   const [error, setError] = useState("");
+  const [uploading, setUploading] = useState(false);
 
   const deadline = useMemo(() => {
     if (!form.deadlineLocal) return 0;
@@ -23,7 +35,7 @@ export default function CreateTicketForm({ disabled, isBusy, onCreate }) {
     setForm((current) => ({ ...current, [field]: value }));
   }
 
-  function submit(event) {
+  async function submit(event) {
     event.preventDefault();
     setError("");
 
@@ -40,16 +52,28 @@ export default function CreateTicketForm({ disabled, isBusy, onCreate }) {
       return;
     }
 
-    const reference =
-      form.detailsCID.trim() ||
-      `opentask://${encodeURIComponent(form.title.trim().toLowerCase())}`;
+    try {
+      setUploading(true);
+      const uploaded = form.detailsFile
+        ? await uploadFileToIPFS(form.detailsFile, `ticket-${form.title.trim()}`)
+        : null;
+      const reference =
+        uploaded?.uri ||
+        form.detailsCID.trim() ||
+        `opentask://${encodeURIComponent(form.title.trim().toLowerCase())}`;
 
-    onCreate({
-      title: form.title.trim(),
-      detailsCID: reference,
-      amount: form.amount,
-      deadline,
-    });
+      await onCreate({
+        title: form.title.trim(),
+        detailsCID: reference,
+        category: form.category,
+        amount: form.amount,
+        deadline,
+      });
+    } catch (uploadError) {
+      setError(uploadError.message || "Upload IPFS failed.");
+    } finally {
+      setUploading(false);
+    }
   }
 
   return (
@@ -108,6 +132,41 @@ export default function CreateTicketForm({ disabled, isBusy, onCreate }) {
           <p className="text-xs text-slate-400">Nội dung này được lưu trực tiếp vào Smart Contract — hiển thị cho Worker khi xem ticket.</p>
         </label>
 
+        <label className="space-y-2">
+          <span className="text-sm font-bold text-slate-700">
+            Linh vuc cong viec
+          </span>
+          <select
+            value={form.category}
+            onChange={(event) => update("category", Number(event.target.value))}
+            className="min-h-12 w-full rounded-2xl border border-[#E6EAF5] bg-white px-4 py-3 text-sm font-bold text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+          >
+            {categories.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="space-y-2">
+          <span className="text-sm font-bold text-slate-700">
+            File mo ta cong viec (upload IPFS)
+          </span>
+          <input
+            type="file"
+            onChange={(event) =>
+              update("detailsFile", event.target.files?.[0] || null)
+            }
+            className="w-full rounded-2xl border border-[#E6EAF5] bg-white px-4 py-3 text-sm font-medium text-slate-700 file:mr-4 file:rounded-xl file:border-0 file:bg-blue-50 file:px-3 file:py-2 file:text-xs file:font-black file:text-blue-700"
+          />
+          {form.detailsFile && (
+            <p className="text-xs font-semibold text-slate-400">
+              Se upload len IPFS truoc khi tao ticket: {form.detailsFile.name}
+            </p>
+          )}
+        </label>
+
         <div className="grid gap-4 lg:grid-cols-2">
           <label className="space-y-2">
             <span className="text-sm font-bold text-slate-700">
@@ -154,12 +213,12 @@ export default function CreateTicketForm({ disabled, isBusy, onCreate }) {
 
         <motion.button
           type="submit"
-          disabled={disabled || isBusy}
-          whileHover={disabled || isBusy ? undefined : { scale: 1.01 }}
-          whileTap={disabled || isBusy ? undefined : { scale: 0.985 }}
+          disabled={disabled || isBusy || uploading}
+          whileHover={disabled || isBusy || uploading ? undefined : { scale: 1.01 }}
+          whileTap={disabled || isBusy || uploading ? undefined : { scale: 0.985 }}
           className="inline-flex h-[52px] w-full items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(100deg,#2563EB,#7C3AED,#2563EB)] bg-[length:200%_100%] px-6 text-sm font-black text-white shadow-lg shadow-blue-500/25 transition duration-300 hover:bg-right hover:shadow-xl hover:shadow-violet-500/25 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {isBusy ? <Loader2 className="h-5 w-5 animate-spin" /> : <LockKeyhole className="h-5 w-5" />}
+          {isBusy || uploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <LockKeyhole className="h-5 w-5" />}
           {isBusy ? "Đang xử lý giao dịch..." : "Tạo Ticket & Khóa ETH"}
         </motion.button>
       </form>

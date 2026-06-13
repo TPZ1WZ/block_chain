@@ -2,6 +2,15 @@ import { motion } from "framer-motion";
 import { PlusCircle, SlidersHorizontal, Ticket } from "lucide-react";
 import TicketCard from "./TicketCard";
 
+const categories = [
+  { id: "all", label: "Tat ca chuyen mon" },
+  { id: "0", label: "Web design" },
+  { id: "1", label: "Smart contract" },
+  { id: "2", label: "Data analysis" },
+  { id: "3", label: "Content writing" },
+  { id: "4", label: "Translation" },
+];
+
 const tabs = [
   { id: "all", label: "Tất cả" },
   { id: "open", label: "Đang mở" },
@@ -11,25 +20,30 @@ const tabs = [
   { id: "disputed", label: "Tranh chấp" },
 ];
 
-function filterTickets(tickets, activeTab, address) {
-  if (activeTab === "open") return tickets.filter((ticket) => ticket.status === 0);
+function filterTickets(tickets, activeTab, address, categoryFilter) {
+  const byCategory =
+    categoryFilter === "all"
+      ? tickets
+      : tickets.filter((ticket) => String(ticket.category ?? 0) === categoryFilter);
+
+  if (activeTab === "open") return byCategory.filter((ticket) => ticket.status === 0);
   if (activeTab === "active") {
-    return tickets.filter((ticket) => ticket.status === 1);
+    return byCategory.filter((ticket) => ticket.status === 1);
   }
-  if (activeTab === "submitted") return tickets.filter((ticket) => ticket.status === 2);
-  if (activeTab === "paid") return tickets.filter((ticket) => ticket.status === 4);
+  if (activeTab === "submitted") return byCategory.filter((ticket) => ticket.status === 2);
+  if (activeTab === "paid") return byCategory.filter((ticket) => ticket.status === 4);
   if (activeTab === "disputed") {
-    return tickets.filter((ticket) => ticket.status === 3);
+    return byCategory.filter((ticket) => ticket.status === 3);
   }
   if (activeTab === "mine" && address) {
     const current = address.toLowerCase();
-    return tickets.filter(
+    return byCategory.filter(
       (ticket) =>
         ticket.company.toLowerCase() === current ||
         ticket.worker.toLowerCase() === current
     );
   }
-  return tickets;
+  return byCategory;
 }
 
 export default function TicketBoard({
@@ -39,13 +53,19 @@ export default function TicketBoard({
   onSelect,
   selectedTicket,
   address,
+  currentTime,
   loading,
   onTicketAction,
+  onRefresh,
   showTabs = true,
   title = "Danh sách ticket",
   onCreateTicket,
+  categoryFilter = "all",
+  onCategoryFilterChange,
+  maxItems,
 }) {
-  const filtered = filterTickets(tickets, activeTab, address);
+  const filtered = filterTickets(tickets, activeTab, address, categoryFilter);
+  const visibleTickets = maxItems ? filtered.slice(0, maxItems) : filtered;
 
   return (
     <motion.section
@@ -63,8 +83,20 @@ export default function TicketBoard({
           </div>
           <h2 className="mt-3 text-2xl font-black text-slate-950">{title}</h2>
         </div>
+        <select
+          value={categoryFilter}
+          onChange={(event) => onCategoryFilterChange?.(event.target.value)}
+          className="min-h-11 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-600 shadow-sm outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-100"
+        >
+          {categories.map((item) => (
+            <option key={item.id} value={item.id}>
+              {item.label}
+            </option>
+          ))}
+        </select>
         <button
           type="button"
+          onClick={onRefresh}
           className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-600 shadow-sm"
         >
           <SlidersHorizontal className="h-4 w-4" />
@@ -100,18 +132,19 @@ export default function TicketBoard({
             />
           ))}
         </div>
-      ) : filtered.length ? (
+      ) : visibleTickets.length ? (
         <motion.div
           className="mt-6 grid gap-5 md:grid-cols-2"
           variants={{ hidden: {}, show: { transition: { staggerChildren: 0.06 } } }}
           initial="hidden"
           animate="show"
         >
-          {filtered.map((ticket) => (
+          {visibleTickets.map((ticket) => (
             <TicketCard
               key={ticket.address}
               ticket={ticket}
               currentAddress={address}
+              currentTime={currentTime}
               selected={
                 selectedTicket?.address?.toLowerCase() === ticket.address.toLowerCase()
               }

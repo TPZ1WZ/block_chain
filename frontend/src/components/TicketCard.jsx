@@ -3,10 +3,19 @@ import { motion } from "framer-motion";
 import { formatEth, formatUnixDate, shortAddress, ZERO_ADDRESS } from "../utils/format";
 import { getStatusMeta } from "../utils/status";
 
+const categoryLabels = [
+  "Web design",
+  "Smart contract",
+  "Data analysis",
+  "Content writing",
+  "Translation",
+];
+
 export default function TicketCard({
   ticket,
   selected,
   currentAddress,
+  currentTime,
   onSelect,
   onClaim,
 }) {
@@ -26,12 +35,17 @@ export default function TicketCard({
       }`}
     >
       <div className="flex items-start justify-between gap-3">
-        <span
-          className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-black ring-1 ${status.tone}`}
-        >
-          <span className={`h-2 w-2 rounded-full ${status.dot}`} />
-          {status.label}
-        </span>
+        <div className="flex flex-wrap gap-2">
+          <span
+            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-black ring-1 ${status.tone}`}
+          >
+            <span className={`h-2 w-2 rounded-full ${status.dot}`} />
+            {status.label}
+          </span>
+          <span className="inline-flex items-center rounded-full bg-slate-50 px-3 py-1 text-xs font-black text-slate-500 ring-1 ring-slate-100">
+            {categoryLabels[ticket.category] || "Khac"}
+          </span>
+        </div>
         <p className="text-right text-lg font-black text-emerald-600">
           {formatEth(ticket.amount)} ETH
         </p>
@@ -57,8 +71,7 @@ export default function TicketCard({
           </span>
         </div>
         {(() => {
-          const now = Math.floor(Date.now() / 1000);
-          const diff = ticket.deadline - now;
+          const diff = ticket.deadline - currentTime;
           const isExpired = diff < 0;
           const isUrgent = diff >= 0 && diff < 48 * 3600;
           return (

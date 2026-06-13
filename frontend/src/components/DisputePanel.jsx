@@ -1,6 +1,6 @@
-export default function DisputePanel({ multisig }) {
+export default function DisputePanel({ multisig, ticketAddr }) {
   async function vote(payFreelancer) {
-    await (await multisig.vote(payFreelancer)).wait();
+    await (await multisig.vote(ticketAddr, payFreelancer)).wait();
     alert("Vote submitted");
   }
 

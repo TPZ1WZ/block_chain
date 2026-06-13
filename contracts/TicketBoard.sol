@@ -60,13 +60,32 @@ contract TicketBoard {
         string calldata detailsCID,
         uint256 deadline
     ) external payable returns (address) {
+        return _createTicket(title, detailsCID, deadline, 0);
+    }
+
+    function createTicketWithCategory(
+        string calldata title,
+        string calldata detailsCID,
+        uint256 deadline,
+        uint8 category
+    ) external payable returns (address) {
+        return _createTicket(title, detailsCID, deadline, category);
+    }
+
+    function _createTicket(
+        string calldata title,
+        string calldata detailsCID,
+        uint256 deadline,
+        uint8 category
+    ) internal returns (address) {
         require(msg.value > 0, "Amount must be > 0");
         require(deadline > block.timestamp, "Invalid deadline");
         require(bytes(title).length > 0, "Title required");
+        require(category < 5, "Invalid category");
 
         TicketEscrow escrow = new TicketEscrow();
 
-        escrow.init{value: msg.value}(msg.sender, deadline, title, detailsCID);
+        escrow.init{value: msg.value}(msg.sender, deadline, title, detailsCID, category);
         escrow.setArbiter(arbiter);
 
         address escrowAddr = address(escrow);

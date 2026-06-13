@@ -93,7 +93,25 @@ export default function Header({
                     {visible.map((n) => (
                       <li key={n.id} className="flex items-start gap-3 px-4 py-3">
                         <span className="mt-0.5 text-lg">{n.icon}</span>
-                        <div className="min-w-0 flex-1">
+                        <div
+                          role={n.onClick ? "button" : undefined}
+                          tabIndex={n.onClick ? 0 : undefined}
+                          onClick={() => {
+                            n.onClick?.();
+                            setShowNotifs(false);
+                          }}
+                          onKeyDown={(event) => {
+                            if (!n.onClick) return;
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              n.onClick();
+                              setShowNotifs(false);
+                            }
+                          }}
+                          className={`min-w-0 flex-1 ${
+                            n.onClick ? "cursor-pointer rounded-xl outline-none hover:text-blue-700 focus:ring-2 focus:ring-blue-100" : ""
+                          }`}
+                        >
                           <p className="text-sm font-bold text-slate-800">{n.title}</p>
                           <p className="text-xs text-slate-500">{n.body}</p>
                         </div>

@@ -5,6 +5,10 @@ interface IEscrowFactory {
     function onTicketClaim(address worker) external;
 }
 
+interface IDisputeCoordinator {
+    function openDispute(address ticket) external;
+}
+
 contract TicketEscrow {
     /* =====================================================
                             STORAGE
@@ -28,6 +32,7 @@ contract TicketEscrow {
     /// @notice Ticket metadata
     string public title;
     string public detailsCID;
+    uint8 public category;
 
     /// @notice Submission data
     string public proofCID;
@@ -105,6 +110,26 @@ contract TicketEscrow {
         string calldata _title,
         string calldata _detailsCID
     ) external payable onlyFactory {
+        _init(_company, _deadline, _title, _detailsCID, 0);
+    }
+
+    function init(
+        address _company,
+        uint256 _deadline,
+        string calldata _title,
+        string calldata _detailsCID,
+        uint8 _category
+    ) external payable onlyFactory {
+        _init(_company, _deadline, _title, _detailsCID, _category);
+    }
+
+    function _init(
+        address _company,
+        uint256 _deadline,
+        string calldata _title,
+        string calldata _detailsCID,
+        uint8 _category
+    ) internal {
         require(company == address(0), "Already initialized");
         require(_company != address(0), "Invalid company");
         require(_deadline > block.timestamp, "Invalid deadline");
@@ -116,6 +141,7 @@ contract TicketEscrow {
         deadline = _deadline;
         title = _title;
         detailsCID = _detailsCID;
+        category = _category;
         createdAt = block.timestamp;
         status = Status.Open;
     }
@@ -210,6 +236,7 @@ contract TicketEscrow {
         require(status == Status.Submitted, "Not submitted");
 
         status = Status.Disputed;
+        IDisputeCoordinator(arbiter).openDispute(address(this));
         emit DisputeOpened(msg.sender);
     }
 
@@ -223,6 +250,7 @@ contract TicketEscrow {
         require(block.timestamp > deadline, "Deadline not passed");
 
         status = Status.Disputed;
+        IDisputeCoordinator(arbiter).openDispute(address(this));
         emit DisputeOpened(msg.sender);
     }
 

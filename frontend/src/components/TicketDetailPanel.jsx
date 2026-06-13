@@ -5,6 +5,7 @@ import {
   BadgeCheck,
   Ban,
   CheckCircle2,
+  ExternalLink,
   FileCheck2,
   GitPullRequestDraft,
   Scale,
@@ -14,16 +15,32 @@ import {
 } from "lucide-react";
 import { formatEth, formatUnixDate, shortAddress, ZERO_ADDRESS } from "../utils/format";
 import { getStatusMeta } from "../utils/status";
+import { ipfsToGatewayUrl, uploadFileToIPFS } from "../lib/ipfs";
+
+const categoryLabels = [
+  "Web design",
+  "Smart contract",
+  "Data analysis",
+  "Content writing",
+  "Translation",
+];
 
 export default function TicketDetailPanel({
   ticket,
   address,
   arbiters,
+  currentTime,
+  hasCurrentArbiterVoted,
+  voteSummary,
+  requiredVotes,
+  selectedDisputeArbiters = [],
   disabled,
   onAction,
 }) {
   const [proofCID, setProofCID] = useState("");
   const [proofNote, setProofNote] = useState("");
+  const [proofFile, setProofFile] = useState(null);
+  const [uploadingProof, setUploadingProof] = useState(false);
   const [reason, setReason] = useState("");
 
   const role = useMemo(() => {
@@ -32,9 +49,12 @@ export default function TicketDetailPanel({
     return {
       isCompany: ticket.company.toLowerCase() === current,
       isWorker: ticket.worker.toLowerCase() === current,
-      isArbiter: arbiters.some((item) => item.toLowerCase() === current),
+      isArbiter:
+        selectedDisputeArbiters.length > 0
+          ? selectedDisputeArbiters.some((item) => item.toLowerCase() === current)
+          : arbiters.some((item) => item.toLowerCase() === current),
     };
-  }, [address, arbiters, ticket]);
+  }, [address, arbiters, selectedDisputeArbiters, ticket]);
 
   if (!ticket) {
     return (
@@ -61,13 +81,26 @@ export default function TicketDetailPanel({
   const isClaimed = ticket.status === 1;
   const isSubmitted = ticket.status === 2;
   const isDisputed = ticket.status === 3;
+  const canWorkerDispute = isSubmitted && ticket.deadline < currentTime;
+  const detailsUrl = ipfsToGatewayUrl(ticket.detailsCID);
+  const proofUrl = ipfsToGatewayUrl(ticket.proofCID);
 
-  function submitProof() {
-    if (!proofCID.trim()) return;
+  async function submitProof() {
+    if (!proofCID.trim() && !proofFile) return;
+    let uploaded = null;
+    try {
+      setUploadingProof(true);
+      uploaded = proofFile
+        ? await uploadFileToIPFS(proofFile, `proof-${ticket.address}`)
+        : null;
+    } finally {
+      setUploadingProof(false);
+    }
+    const nextProofCID = uploaded?.uri || proofCID.trim();
     onAction(
       ticket,
       { type: "submit-proof", label: "Nộp minh chứng" },
-      { proofCID: proofCID.trim(), proofNote: proofNote.trim() }
+      { proofCID: nextProofCID, proofNote: proofNote.trim() }
     );
   }
 
@@ -118,8 +151,25 @@ export default function TicketDetailPanel({
           icon={UserRound}
         />
         <InfoRow label="Thời hạn" value={formatUnixDate(ticket.deadline)} icon={AlertTriangle} />
-        <InfoRow label="CID chi tiết" value={ticket.detailsCID || "-"} icon={FileCheck2} wrap />
-        <InfoRow label="CID minh chứng" value={ticket.proofCID || "-"} icon={FileCheck2} wrap />
+        <InfoRow
+          label="Linh vuc"
+          value={categoryLabels[ticket.category] || "Khac"}
+          icon={FileCheck2}
+        />
+        <InfoRow
+          label="CID chi tiết"
+          value={ticket.detailsCID || "-"}
+          icon={FileCheck2}
+          href={detailsUrl}
+          wrap
+        />
+        <InfoRow
+          label="CID minh chứng"
+          value={ticket.proofCID || "-"}
+          icon={FileCheck2}
+          href={proofUrl}
+          wrap
+        />
         <InfoRow label="Ghi chú minh chứng" value={ticket.proofNote || "-"} icon={Send} wrap />
         {ticket.rejectionReason && (
           <InfoRow
@@ -163,6 +213,16 @@ export default function TicketDetailPanel({
               placeholder="ipfs://proof-cid"
               className="mt-3 w-full rounded-2xl border border-blue-100 bg-white px-4 py-3 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
             />
+            <input
+              type="file"
+              onChange={(event) => setProofFile(event.target.files?.[0] || null)}
+              className="mt-3 w-full rounded-2xl border border-blue-100 bg-white px-4 py-3 text-sm file:mr-4 file:rounded-xl file:border-0 file:bg-blue-50 file:px-3 file:py-2 file:text-xs file:font-black file:text-blue-700"
+            />
+            {proofFile && (
+              <p className="mt-2 text-xs font-semibold text-blue-700">
+                Se upload proof len IPFS: {proofFile.name}
+              </p>
+            )}
             <textarea
               value={proofNote}
               onChange={(event) => setProofNote(event.target.value)}
@@ -172,7 +232,7 @@ export default function TicketDetailPanel({
             />
             <ActionButton
               icon={Send}
-              disabled={disabled || !proofCID.trim()}
+              disabled={disabled || uploadingProof || (!proofCID.trim() && !proofFile)}
               label="Nộp minh chứng"
               onClick={submitProof}
               className="mt-3"
@@ -233,7 +293,7 @@ export default function TicketDetailPanel({
           <ActionButton
             icon={Scale}
             tone="danger"
-            disabled={disabled}
+            disabled={disabled || !canWorkerDispute}
             label="Mở tranh chấp"
             onClick={() =>
               onAction(ticket, { type: "worker-dispute", label: "Mở tranh chấp" })
@@ -247,12 +307,60 @@ export default function TicketDetailPanel({
               <Scale className="h-4 w-4" />
               Bảng bỏ phiếu Arbiter
             </h4>
+            {selectedDisputeArbiters.length > 0 && (
+              <div className="mt-3 rounded-2xl bg-white/80 px-3 py-2 text-xs font-bold text-violet-700 ring-1 ring-violet-100">
+                <p className="font-black uppercase text-violet-400">
+                  Arbiter duoc chon
+                </p>
+                <p className="mt-1 break-all">
+                  {selectedDisputeArbiters.map(shortAddress).join(", ")}
+                </p>
+              </div>
+            )}
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <div className="rounded-2xl bg-white/80 px-3 py-2 ring-1 ring-violet-100">
+                <p className="text-[11px] font-black uppercase text-violet-400">
+                  Tra Worker
+                </p>
+                <p className="mt-1 text-sm font-black text-violet-900">
+                  {voteSummary?.forWorker || 0}/{requiredVotes || arbiters.length}
+                </p>
+              </div>
+              <div className="rounded-2xl bg-white/80 px-3 py-2 ring-1 ring-violet-100">
+                <p className="text-[11px] font-black uppercase text-violet-400">
+                  Hoan Company
+                </p>
+                <p className="mt-1 text-sm font-black text-violet-900">
+                  {voteSummary?.forCompany || 0}/{requiredVotes || arbiters.length}
+                </p>
+              </div>
+            </div>
+            {hasCurrentArbiterVoted && (
+              <p className="mt-2 rounded-2xl bg-white/80 px-3 py-2 text-xs font-bold text-violet-700 ring-1 ring-violet-100">
+                Ví arbiter này đã bỏ phiếu cho ticket này.
+              </p>
+            )}
+            {!hasCurrentArbiterVoted && (
+              <button
+                type="button"
+                disabled={disabled}
+                onClick={() =>
+                  onAction(ticket, {
+                    type: "decline-dispute",
+                    label: "Tu choi xu ly tranh chap",
+                  })
+                }
+                className="mt-3 w-full rounded-2xl border border-violet-100 bg-white px-4 py-3 text-xs font-black text-violet-700 transition hover:bg-violet-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Tu choi xu ly tranh chap
+              </button>
+            )}
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <ActionButton
                 icon={CheckCircle2}
                 tone="success"
-                disabled={disabled}
-                label="Bỏ phiếu trả Worker"
+                disabled={disabled || hasCurrentArbiterVoted}
+                label={hasCurrentArbiterVoted ? "Đã bỏ phiếu" : "Bỏ phiếu trả Worker"}
                 onClick={() =>
                   onAction(
                     ticket,
@@ -264,8 +372,8 @@ export default function TicketDetailPanel({
               <ActionButton
                 icon={Ban}
                 tone="danger"
-                disabled={disabled}
-                label="Bỏ phiếu hoàn tiền Company"
+                disabled={disabled || hasCurrentArbiterVoted}
+                label={hasCurrentArbiterVoted ? "Đã bỏ phiếu" : "Bỏ phiếu hoàn tiền Company"}
                 onClick={() =>
                   onAction(
                     ticket,
@@ -283,7 +391,9 @@ export default function TicketDetailPanel({
   );
 }
 
-function InfoRow({ label, value, icon, wrap }) {
+function InfoRow({ label, value, icon, href, wrap }) {
+  const hasLink = href && value && value !== "-";
+
   return (
     <div className="rounded-2xl border border-[#E6EAF5] bg-white/78 px-4 py-3">
       <div className="flex items-start gap-3">
@@ -301,6 +411,17 @@ function InfoRow({ label, value, icon, wrap }) {
           >
             {value}
           </p>
+          {hasLink && (
+            <a
+              href={href}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-2 inline-flex items-center gap-1.5 rounded-xl bg-blue-50 px-3 py-2 text-xs font-black text-blue-700 ring-1 ring-blue-100 transition hover:bg-blue-100"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              Mở file
+            </a>
+          )}
         </div>
       </div>
     </div>

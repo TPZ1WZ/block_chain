@@ -20,8 +20,8 @@ import TicketBoard from "./components/TicketBoard";
 import TicketDetailPanel from "./components/TicketDetailPanel";
 import WalletCard from "./components/WalletCard";
 import { getMultiSig, getTicketBoard, getTicketEscrow } from "./lib/contracts";
-import { CHAIN_ID, MULTISIG_ADDRESS, TICKET_BOARD_ADDRESS } from "./config";
-import { formatEth, formatUnixDate, shortAddress } from "./utils/format";
+import { CHAIN_ID, MULTISIG_ADDRESS, RPC_URL, TICKET_BOARD_ADDRESS } from "./config";
+import { formatEth, formatUnixDate, shortAddress, ZERO_ADDRESS } from "./utils/format";
 import { getStatusMeta } from "./utils/status";
 
 function normalizeError(error) {
@@ -34,6 +34,10 @@ function normalizeError(error) {
   );
 }
 
+function getReadProvider() {
+  return new ethers.JsonRpcProvider(RPC_URL);
+}
+
 export default function App() {
   const [provider, setProvider] = useState(null);
   const [signer, setSigner] = useState(null);
@@ -44,11 +48,31 @@ export default function App() {
   const [tickets, setTickets] = useState([]);
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [arbiters, setArbiters] = useState([]);
+  const [requiredVotes, setRequiredVotes] = useState(2);
+  const [minArbiterStake, setMinArbiterStake] = useState("0");
+  const [arbiterStake, setArbiterStake] = useState("0");
+  const [isCurrentArbiter, setIsCurrentArbiter] = useState(false);
+  const [currentExpertiseMask, setCurrentExpertiseMask] = useState(0);
+  const [selectedDisputeArbiters, setSelectedDisputeArbiters] = useState([]);
   const [activePage, setActivePage] = useState("overview");
   const [boardTab, setBoardTab] = useState("all");
+  const [overviewCategoryFilter, setOverviewCategoryFilter] = useState("all");
+  const [boardCategoryFilter, setBoardCategoryFilter] = useState("all");
   const [loadingTickets, setLoadingTickets] = useState(false);
   const [walletError, setWalletError] = useState("");
   const [txState, setTxState] = useState({ stage: "idle", label: "" });
+  const [txHistory, setTxHistory] = useState([]);
+  const [hasCurrentArbiterVoted, setHasCurrentArbiterVoted] = useState(false);
+  const [arbiterVoteMap, setArbiterVoteMap] = useState({});
+  const [arbiterAssignmentMap, setArbiterAssignmentMap] = useState({});
+  const [voteSummary, setVoteSummary] = useState({
+    forWorker: 0,
+    forCompany: 0,
+    resolved: false,
+  });
+  const [currentTime, setCurrentTime] = useState(() =>
+    Math.floor(Date.now() / 1000)
+  );
   const [toasts, setToasts] = useState([]);
 
   const isConnected = Boolean(signer && address);
@@ -91,11 +115,12 @@ export default function App() {
   }, []);
 
   const refreshWallet = useCallback(async () => {
-    if (!window.ethereum || !provider || !address) return;
+    if (!address) return;
     try {
+      const readProvider = getReadProvider();
       const [rawBalance, network] = await Promise.all([
-        provider.getBalance(address),
-        provider.getNetwork(),
+        readProvider.getBalance(address),
+        readProvider.getNetwork(),
       ]);
       setBalance(formatEth(rawBalance));
       setNetworkName(
@@ -106,7 +131,7 @@ export default function App() {
     } catch (error) {
       console.error("refreshWallet failed", error);
     }
-  }, [address, provider]);
+  }, [address]);
 
   const readTicket = useCallback(async (ticketAddress, runner) => {
     const escrow = getTicketEscrow(ticketAddress, runner);
@@ -121,6 +146,11 @@ export default function App() {
       proofCID,
       proofNote,
       rejectionReason,
+      createdAt,
+      claimedAt,
+      submittedAt,
+      approvedAt,
+      category,
     ] = await Promise.all([
       escrow.company(),
       escrow.worker(),
@@ -132,6 +162,11 @@ export default function App() {
       escrow.proofCID(),
       escrow.proofNote(),
       escrow.rejectionReason(),
+      escrow.createdAt(),
+      escrow.claimedAt(),
+      escrow.submittedAt(),
+      escrow.approvedAt(),
+      escrow.category(),
     ]);
 
     return {
@@ -146,6 +181,11 @@ export default function App() {
       proofCID,
       proofNote,
       rejectionReason,
+      createdAt: Number(createdAt),
+      claimedAt: Number(claimedAt),
+      submittedAt: Number(submittedAt),
+      approvedAt: Number(approvedAt),
+      category: Number(category),
     };
   }, []);
 
@@ -154,7 +194,9 @@ export default function App() {
 
     try {
       setLoadingTickets(true);
-      const readProvider = provider || new ethers.BrowserProvider(window.ethereum);
+      setTickets([]);
+      setSelectedTicket(null);
+      const readProvider = getReadProvider();
       const board = getTicketBoard(readProvider);
       const addresses = await board.getAllTickets();
       const nextTickets = await Promise.all(
@@ -176,18 +218,35 @@ export default function App() {
     } finally {
       setLoadingTickets(false);
     }
-  }, [provider, readTicket]);
+  }, [readTicket]);
 
   const loadArbiters = useCallback(async () => {
-    if (!provider) return;
     try {
-      const multisig = getMultiSig(provider);
-      setArbiters(await multisig.getArbiters());
+      const multisig = getMultiSig(getReadProvider());
+      const [nextArbiters, nextRequired] = await Promise.all([
+        multisig.getArbiters(),
+        multisig.required(),
+      ]);
+      setArbiters(nextArbiters);
+      setRequiredVotes(Number(nextRequired));
+
+      const [nextMinStake, nextStake, nextIsArbiter, nextExpertiseMask] = await Promise.all([
+        multisig.minStake(),
+        address ? multisig.stakes(address) : Promise.resolve(0n),
+        address ? multisig.isArbiter(address) : Promise.resolve(false),
+        address ? multisig.expertiseMask(address) : Promise.resolve(0n),
+      ]);
+      setMinArbiterStake(formatEth(nextMinStake));
+      setArbiterStake(formatEth(nextStake));
+      setIsCurrentArbiter(Boolean(nextIsArbiter));
+      setCurrentExpertiseMask(Number(nextExpertiseMask));
     } catch (error) {
       console.error("loadArbiters failed", error);
       setArbiters([]);
+      setIsCurrentArbiter(false);
+      setCurrentExpertiseMask(0);
     }
-  }, [provider]);
+  }, [address]);
 
   async function runTransaction(label, callback) {
     if (!signer) {
@@ -199,8 +258,19 @@ export default function App() {
       setTxState({ stage: "wallet", label });
       const tx = await callback();
       setTxState({ stage: "pending", label });
-      await tx.wait();
+      const receipt = await tx.wait();
       setTxState({ stage: "confirmed", label });
+      setTxHistory((items) => [
+        {
+          id: `${tx.hash}-${items.length}`,
+          label,
+          hash: tx.hash,
+          blockNumber: receipt.blockNumber,
+          from: address,
+          timestamp: Math.floor(Date.now() / 1000),
+        },
+        ...items,
+      ]);
       pushToast("success", `${label} đã xác nhận`);
       await Promise.all([loadTickets(), refreshWallet()]);
       window.setTimeout(() => setTxState({ stage: "idle", label: "" }), 1400);
@@ -208,34 +278,108 @@ export default function App() {
       const message = normalizeError(error);
       setTxState({ stage: "error", label: message });
       pushToast("error", message);
+      await Promise.all([loadTickets(), refreshWallet()]);
     }
   }
 
   async function createTicket(form) {
     await runTransaction("Tạo Ticket", async () => {
       const board = getTicketBoard(signer);
-      return board.createTicket(form.title, form.detailsCID, form.deadline, {
+      return board.createTicketWithCategory(form.title, form.detailsCID, form.deadline, form.category, {
         value: ethers.parseEther(form.amount),
       });
     });
   }
 
+  async function stakeAsArbiter(amount) {
+    await runTransaction("Stake Arbiter", async () => {
+      const multisig = getMultiSig(signer);
+      return multisig.stakeAsArbiter({ value: ethers.parseEther(amount) });
+    });
+    await loadArbiters();
+    await refreshWallet();
+  }
+
+  async function unstakeArbiter(amount) {
+    await runTransaction("Unstake Arbiter", async () => {
+      const multisig = getMultiSig(signer);
+      return multisig.unstake(ethers.parseEther(amount));
+    });
+    await loadArbiters();
+    await refreshWallet();
+  }
+
+  async function updateArbiterExpertise(mask) {
+    await runTransaction("Cap nhat chuyen mon", async () => {
+      const multisig = getMultiSig(signer);
+      return multisig.setExpertiseMask(mask);
+    });
+    await loadArbiters();
+  }
+
   async function ticketAction(ticket, action, payload = {}) {
     await runTransaction(action.label, async () => {
+      const latestTicket = await readTicket(ticket.address, getReadProvider());
+      const latestWorker = latestTicket.worker.toLowerCase();
+      const currentAddress = address.toLowerCase();
+
+      if (
+        action.type === "claim" &&
+        (latestTicket.status !== 0 || latestTicket.worker !== ZERO_ADDRESS)
+      ) {
+        throw new Error("Ticket da thay doi trang thai, vui long refresh danh sach");
+      }
+      if (action.type === "cancel" && latestTicket.status !== 0) {
+        throw new Error("Ticket da thay doi trang thai, khong the huy");
+      }
+      if (
+        action.type === "submit-proof" &&
+        (latestTicket.status !== 1 || latestWorker !== currentAddress)
+      ) {
+        throw new Error("Ticket da thay doi trang thai, khong the nop minh chung");
+      }
+      if (
+        ["approve", "resubmit", "company-dispute"].includes(action.type) &&
+        latestTicket.status !== 2
+      ) {
+        throw new Error("Ticket da thay doi trang thai, khong the xu ly");
+      }
+      if (action.type === "worker-dispute" && latestTicket.status !== 2) {
+        throw new Error("Ticket da thay doi trang thai, khong the mo tranh chap");
+      }
+
       const escrow = getTicketEscrow(ticket.address, signer);
 
       if (action.type === "claim") return escrow.claimTicket();
       if (action.type === "cancel") return escrow.cancelOpenTicket();
       if (action.type === "approve") return escrow.approveSubmission();
       if (action.type === "resubmit") return escrow.requestResubmission(payload.reason);
-      if (action.type === "company-dispute") return escrow.disputeByCompany();
-      if (action.type === "worker-dispute") return escrow.disputeByWorker();
+      if (action.type === "company-dispute") {
+        return escrow.disputeByCompany({ gasLimit: 900000 });
+      }
+      if (action.type === "worker-dispute") {
+        return escrow.disputeByWorker({ gasLimit: 900000 });
+      }
       if (action.type === "submit-proof") {
         return escrow.submitProof(payload.proofCID, payload.proofNote);
       }
       if (action.type === "vote") {
         const multisig = getMultiSig(signer);
+        const [alreadyVoted, selected] = await Promise.all([
+          multisig.hasVoted(ticket.address, address),
+          multisig.isSelectedArbiter(ticket.address, address),
+        ]);
+        if (!selected) {
+          throw new Error("Vi arbiter nay khong duoc chon cho tranh chap nay");
+        }
+        if (alreadyVoted) {
+          throw new Error("Vi arbiter nay da bo phieu cho ticket nay");
+        }
         return multisig.vote(ticket.address, payload.payWorker);
+      }
+      if (action.type === "decline-dispute") {
+        const multisig = getMultiSig(signer);
+        return multisig.declineDispute(ticket.address, { gasLimit: 900000 });
       }
 
       throw new Error("Hành động chưa được hỗ trợ");
@@ -271,6 +415,116 @@ export default function App() {
     loadTickets();
     loadArbiters();
   }, [loadArbiters, loadTickets, provider, refreshWallet]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setCurrentTime(Math.floor(Date.now() / 1000));
+    }, 30000);
+
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadVoteStatus() {
+      if (!selectedTicket) {
+        setHasCurrentArbiterVoted(false);
+        setSelectedDisputeArbiters([]);
+        setVoteSummary({ forWorker: 0, forCompany: 0, resolved: false });
+        return;
+      }
+
+      try {
+        const multisig = getMultiSig(getReadProvider());
+        const [votes, voted, selectedArbiters] = await Promise.all([
+          multisig.getVotes(selectedTicket.address),
+          address
+            ? multisig.hasVoted(selectedTicket.address, address)
+            : Promise.resolve(false),
+          selectedTicket.status === 3
+            ? multisig.getSelectedArbiters(selectedTicket.address)
+            : Promise.resolve([]),
+        ]);
+
+        if (!cancelled) {
+          setVoteSummary({
+            forWorker: Number(votes[0]),
+            forCompany: Number(votes[1]),
+            resolved: votes[2],
+          });
+          setHasCurrentArbiterVoted(voted);
+          setSelectedDisputeArbiters(selectedArbiters);
+        }
+      } catch (error) {
+        console.error("loadVoteStatus failed", error);
+        if (!cancelled) {
+          setHasCurrentArbiterVoted(false);
+          setSelectedDisputeArbiters([]);
+          setVoteSummary({ forWorker: 0, forCompany: 0, resolved: false });
+        }
+      }
+    }
+
+    loadVoteStatus();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [address, selectedTicket]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadArbiterDisputeVotes() {
+      const current = address?.toLowerCase();
+      const isCurrentArbiter =
+        current && arbiters.some((item) => item.toLowerCase() === current);
+      const disputedTickets = tickets.filter((ticket) => ticket.status === 3);
+
+      if (!isCurrentArbiter || disputedTickets.length === 0) {
+        setArbiterVoteMap({});
+        setArbiterAssignmentMap({});
+        return;
+      }
+
+      try {
+        const multisig = getMultiSig(getReadProvider());
+        const results = await Promise.all(
+          disputedTickets.map(async (ticket) => {
+            const [voted, selected] = await Promise.all([
+              multisig.hasVoted(ticket.address, address),
+              multisig.isSelectedArbiter(ticket.address, address),
+            ]);
+            return [ticket.address.toLowerCase(), voted, selected];
+          })
+        );
+
+        if (!cancelled) {
+          setArbiterVoteMap(
+            Object.fromEntries(results.map(([ticket, voted]) => [ticket, voted]))
+          );
+          setArbiterAssignmentMap(
+            Object.fromEntries(
+              results.map(([ticket, , selected]) => [ticket, selected])
+            )
+          );
+        }
+      } catch (error) {
+        console.error("loadArbiterDisputeVotes failed", error);
+        if (!cancelled) {
+          setArbiterVoteMap({});
+          setArbiterAssignmentMap({});
+        }
+      }
+    }
+
+    loadArbiterDisputeVotes();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [address, arbiters, tickets]);
 
   const stats = useMemo(() => {
     const open = tickets.filter((ticket) => ticket.status === 0).length;
@@ -314,6 +568,8 @@ export default function App() {
       address,
       loading: loadingTickets,
       onTicketAction: ticketAction,
+      currentTime,
+      onRefresh: loadTickets,
     };
 
     if (activePage === "create") {
@@ -351,6 +607,8 @@ export default function App() {
             tickets={tickets}
             activeTab={boardTab}
             onTabChange={setBoardTab}
+            categoryFilter={boardCategoryFilter}
+            onCategoryFilterChange={setBoardCategoryFilter}
             onCreateTicket={() => setActivePage("create")}
             {...commonBoardProps}
           />
@@ -359,6 +617,11 @@ export default function App() {
               ticket={selectedTicket}
               address={address}
               arbiters={arbiters}
+              currentTime={currentTime}
+              hasCurrentArbiterVoted={hasCurrentArbiterVoted}
+              voteSummary={voteSummary}
+              requiredVotes={requiredVotes}
+              selectedDisputeArbiters={selectedDisputeArbiters}
               disabled={!isConnected || txState.stage !== "idle"}
               onAction={ticketAction}
             />
@@ -374,12 +637,28 @@ export default function App() {
             title="Ticket của tôi"
             description="Theo dõi các ticket bạn đã tạo, đã nhận hoặc đang chờ xử lý."
           />
-          <MyTicketsPage
-            created={myCreatedTickets}
-            claimed={myClaimedTickets}
-            pending={pendingTickets}
-            commonBoardProps={commonBoardProps}
-          />
+          <div className="grid grid-cols-1 gap-7 lg:grid-cols-[minmax(0,1fr)_360px]">
+            <MyTicketsPage
+              created={myCreatedTickets}
+              claimed={myClaimedTickets}
+              pending={pendingTickets}
+              commonBoardProps={commonBoardProps}
+            />
+            <div id="ticket-detail-panel">
+              <TicketDetailPanel
+                ticket={selectedTicket}
+                address={address}
+                arbiters={arbiters}
+                currentTime={currentTime}
+                hasCurrentArbiterVoted={hasCurrentArbiterVoted}
+                voteSummary={voteSummary}
+                requiredVotes={requiredVotes}
+                selectedDisputeArbiters={selectedDisputeArbiters}
+                disabled={!isConnected || txState.stage !== "idle"}
+                onAction={ticketAction}
+              />
+            </div>
+          </div>
         </section>
       );
     }
@@ -424,6 +703,36 @@ export default function App() {
             <h2 className="mt-3 text-2xl font-black text-slate-950">Lịch sử giao dịch</h2>
             <p className="mt-1 text-sm text-slate-500">Các ticket bạn đã tạo hoặc tham gia với ví <span className="font-mono font-bold text-slate-700">{shortAddress(address)}</span></p>
           </div>
+          {isConnected && (
+            <div className="rounded-[24px] border border-[#E6EAF5] bg-white/82 p-5 shadow-sm">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm font-black text-slate-900">Giao dich trong phien</p>
+                  <p className="text-xs font-semibold text-slate-400">
+                    So du hien tai: <span className="text-slate-700">{balance} ETH</span>
+                  </p>
+                </div>
+                <span className="text-xs font-bold text-slate-400">
+                  {txHistory.length} giao dich da xac nhan
+                </span>
+              </div>
+              {txHistory.length > 0 && (
+                <div className="mt-4 space-y-2">
+                  {txHistory.map((tx) => (
+                    <div key={tx.id} className="rounded-2xl border border-[#E6EAF5] bg-slate-50 px-4 py-3">
+                      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                        <p className="text-sm font-black text-slate-800">{tx.label}</p>
+                        <p className="text-xs font-semibold text-slate-400">
+                          Block #{tx.blockNumber} - {formatUnixDate(tx.timestamp)}
+                        </p>
+                      </div>
+                      <p className="mt-1 break-all font-mono text-xs text-slate-500">{tx.hash}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           {!isConnected ? (
             <div className="rounded-3xl border border-dashed border-[#E6EAF5] bg-slate-50/80 p-12 text-center">
               <History className="mx-auto mb-3 h-10 w-10 text-slate-300" />
@@ -452,6 +761,10 @@ export default function App() {
                       </div>
                       <div>
                         <p className="font-black text-slate-900">{t.title}</p>
+                        <p className="mt-1 text-xs text-slate-400">
+                          {t.submittedAt ? `Nop: ${formatUnixDate(t.submittedAt)}` : ""}
+                          {t.approvedAt ? ` - Duyet: ${formatUnixDate(t.approvedAt)}` : ""}
+                        </p>
                         <p className="text-xs text-slate-400">{isCompany ? "Người tạo" : "Worker"} • {formatUnixDate(t.createdAt || t.deadline)}</p>
                       </div>
                     </div>
@@ -503,6 +816,7 @@ export default function App() {
 
     if (activePage === "settings") {
       return (
+        <section className="space-y-6">
         <InfoPanel
           icon={Settings}
           title="Cài đặt hệ thống"
@@ -515,6 +829,18 @@ export default function App() {
             ["Giao diện", "Sáng, Web3 SaaS"],
           ]}
         />
+        <ArbiterStakePanel
+          key={`${address}-${currentExpertiseMask}`}
+          disabled={!isConnected || txState.stage !== "idle"}
+          isArbiter={isCurrentArbiter}
+          stake={arbiterStake}
+          minStake={minArbiterStake}
+          expertiseMask={currentExpertiseMask}
+          onStake={stakeAsArbiter}
+          onUnstake={unstakeArbiter}
+          onUpdateExpertise={updateArbiterExpertise}
+        />
+        </section>
       );
     }
 
@@ -523,10 +849,13 @@ export default function App() {
         <HeroSection stats={stats} />
         <section className="grid grid-cols-1 gap-7 xl:grid-cols-[minmax(0,1fr)_320px]">
           <TicketBoard
-            tickets={tickets.slice(0, 4)}
+            tickets={tickets}
             activeTab="all"
             onTabChange={() => {}}
+            categoryFilter={overviewCategoryFilter}
+            onCategoryFilterChange={setOverviewCategoryFilter}
             showTabs={false}
+            maxItems={4}
             title="Ticket mới nhất"
             {...commonBoardProps}
           />
@@ -542,6 +871,11 @@ export default function App() {
               ticket={selectedTicket}
               address={address}
               arbiters={arbiters}
+              currentTime={currentTime}
+              hasCurrentArbiterVoted={hasCurrentArbiterVoted}
+              voteSummary={voteSummary}
+              requiredVotes={requiredVotes}
+              selectedDisputeArbiters={selectedDisputeArbiters}
               disabled={!isConnected || txState.stage !== "idle"}
               onAction={ticketAction}
             />
@@ -553,9 +887,9 @@ export default function App() {
 
   const notifications = useMemo(() => {
     if (!address || !tickets.length) return [];
-    const now = Math.floor(Date.now() / 1000);
     const result = [];
     const addr = address.toLowerCase();
+    const isCurrentArbiter = arbiters.some((item) => item.toLowerCase() === addr);
     for (const t of tickets) {
       // Worker: proof bị từ chối → cần nộp lại
       if (t.status === 1 && t.rejectionReason && t.worker?.toLowerCase() === addr) {
@@ -566,12 +900,30 @@ export default function App() {
         result.push({ id: `submitted-${t.address}`, icon: "📋", title: `Worker đã nộp minh chứng`, body: `"${t.title}" — vui lòng xem xét và duyệt thanh toán` });
       }
       // Worker: đã nộp proof, deadline qua, company chưa phản hồi → có thể mở tranh chấp
-      if (t.status === 2 && t.deadline < now && t.worker?.toLowerCase() === addr) {
+      if (t.status === 2 && t.deadline < currentTime && t.worker?.toLowerCase() === addr) {
         result.push({ id: `dispute-${t.address}`, icon: "⏰", title: `Deadline đã qua, có thể mở tranh chấp`, body: `"${t.title}" — Company chưa phản hồi` });
+      }
+      if (
+        isCurrentArbiter &&
+        t.status === 3 &&
+        arbiterAssignmentMap[t.address.toLowerCase()] &&
+        !arbiterVoteMap[t.address.toLowerCase()]
+      ) {
+        result.push({
+          id: `arbiter-dispute-${t.address}`,
+          icon: "⚖",
+          title: "Có tranh chấp cần bỏ phiếu",
+          body: `"${t.title}" - mở ticket để xem hồ sơ và vote`,
+          onClick: () => {
+            setSelectedTicket(t);
+            setBoardTab("disputed");
+            setActivePage("board");
+          },
+        });
       }
     }
     return result;
-  }, [address, tickets]);
+  }, [address, arbiters, arbiterAssignmentMap, arbiterVoteMap, currentTime, tickets]);
 
   return (
     <Layout
@@ -712,6 +1064,136 @@ function MyTicketsPage({ created, claimed, pending, commonBoardProps }) {
         {...commonBoardProps}
       />
     </div>
+  );
+}
+
+function ArbiterStakePanel({
+  disabled,
+  isArbiter,
+  stake,
+  minStake,
+  expertiseMask,
+  onStake,
+  onUnstake,
+  onUpdateExpertise,
+}) {
+  const [amount, setAmount] = useState(minStake || "0.1");
+  const [draftMask, setDraftMask] = useState(expertiseMask || 31);
+  const expertiseOptions = [
+    { bit: 0, label: "Web design" },
+    { bit: 1, label: "Smart contract" },
+    { bit: 2, label: "Data analysis" },
+    { bit: 3, label: "Content writing" },
+    { bit: 4, label: "Translation" },
+  ];
+
+  function toggleExpertise(bit) {
+    setDraftMask((current) => current ^ (1 << bit));
+  }
+
+  return (
+    <section className="rounded-[28px] border border-[#E6EAF5] bg-white/80 p-6 shadow-[0_18px_60px_rgba(15,23,42,0.07)] backdrop-blur-xl">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-violet-600">
+            Arbiter staking
+          </p>
+          <h2 className="mt-1 text-2xl font-black text-[#071127]">
+            Stake de tro thanh arbiter
+          </h2>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
+            Vi stake toi thieu se vao pool arbiter. Khi co tranh chap, contract
+            chon mot panel arbiter theo trong so stake va loai tru company/worker
+            cua ticket do.
+          </p>
+        </div>
+        <span
+          className={`rounded-2xl px-4 py-2 text-sm font-black ring-1 ${
+            isArbiter
+              ? "bg-emerald-50 text-emerald-700 ring-emerald-100"
+              : "bg-slate-50 text-slate-500 ring-slate-100"
+          }`}
+        >
+          {isArbiter ? "Dang la arbiter" : "Chua la arbiter"}
+        </span>
+      </div>
+
+      <div className="mt-5 grid gap-3 sm:grid-cols-3">
+        <div className="rounded-2xl border border-[#E6EAF5] bg-slate-50 px-4 py-3">
+          <p className="text-xs font-black uppercase text-slate-400">Stake hien tai</p>
+          <p className="mt-1 text-lg font-black text-slate-900">{stake} ETH</p>
+        </div>
+        <div className="rounded-2xl border border-[#E6EAF5] bg-slate-50 px-4 py-3">
+          <p className="text-xs font-black uppercase text-slate-400">Toi thieu</p>
+          <p className="mt-1 text-lg font-black text-slate-900">{minStake} ETH</p>
+        </div>
+        <label className="rounded-2xl border border-[#E6EAF5] bg-white px-4 py-3">
+          <span className="text-xs font-black uppercase text-slate-400">So ETH</span>
+          <input
+            value={amount}
+            onChange={(event) => setAmount(event.target.value)}
+            className="mt-1 w-full bg-transparent text-lg font-black text-slate-900 outline-none"
+            placeholder={minStake || "0.1"}
+          />
+        </label>
+      </div>
+
+      <div className="mt-5 rounded-2xl border border-[#E6EAF5] bg-slate-50 px-4 py-4">
+        <p className="text-xs font-black uppercase text-slate-400">
+          Chuyen mon xu ly tranh chap
+        </p>
+        <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+          {expertiseOptions.map((item) => {
+            const checked = (draftMask & (1 << item.bit)) !== 0;
+            return (
+              <label
+                key={item.bit}
+                className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-xs font-black ${
+                  checked
+                    ? "border-blue-200 bg-blue-50 text-blue-700"
+                    : "border-slate-200 bg-white text-slate-500"
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => toggleExpertise(item.bit)}
+                  className="h-4 w-4"
+                />
+                {item.label}
+              </label>
+            );
+          })}
+        </div>
+        <button
+          type="button"
+          disabled={disabled || !isArbiter || draftMask === 0}
+          onClick={() => onUpdateExpertise(draftMask)}
+          className="mt-3 rounded-2xl border border-blue-100 bg-white px-4 py-3 text-sm font-black text-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Luu chuyen mon
+        </button>
+      </div>
+
+      <div className="mt-5 grid gap-3 sm:grid-cols-2">
+        <button
+          type="button"
+          disabled={disabled || !amount}
+          onClick={() => onStake(amount)}
+          className="rounded-2xl bg-gradient-to-r from-blue-600 to-violet-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-blue-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Stake lam arbiter
+        </button>
+        <button
+          type="button"
+          disabled={disabled || !amount || Number(stake) <= 0}
+          onClick={() => onUnstake(amount)}
+          className="rounded-2xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm font-black text-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Rut stake
+        </button>
+      </div>
+    </section>
   );
 }
 

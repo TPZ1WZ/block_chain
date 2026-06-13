@@ -208,10 +208,10 @@ describe("TicketEscrow - Comprehensive Tests", function () {
         company.address
       );
 
-      await expect(ticket.connect(company).cancelOpenTicket()).to.emit(
-        ticket,
-        "TicketCancelled"
-      );
+      const tx = await ticket.connect(company).cancelOpenTicket();
+      const receipt = await tx.wait();
+      await expect(tx).to.emit(ticket, "TicketCancelled");
+      const gasCost = receipt.gasUsed * receipt.gasPrice;
 
       expect(await ticket.status()).to.equal(6); // Cancelled
       expect(await ethers.provider.getBalance(ticketAddr)).to.equal(0);
@@ -219,7 +219,9 @@ describe("TicketEscrow - Comprehensive Tests", function () {
       const companyBalanceAfter = await ethers.provider.getBalance(
         company.address
       );
-      expect(companyBalanceAfter - companyBalanceBefore).to.equal(TICKET_VALUE);
+      expect(companyBalanceAfter - companyBalanceBefore + gasCost).to.equal(
+        TICKET_VALUE
+      );
     });
 
     it("❌ Non-company cannot cancel", async function () {
@@ -330,11 +332,9 @@ describe("TicketEscrow - Comprehensive Tests", function () {
       await newTicket.connect(worker).claimTicket();
       await newTicket.connect(worker).submitProof(PROOF_CID, PROOF_NOTE);
 
-      await multisig.connect(arbiter1).vote(newAddr, true);
-
       await expect(
-        multisig.connect(arbiter2).vote(newAddr, true)
-      ).to.be.revertedWith("No dispute");
+        multisig.connect(arbiter1).vote(newAddr, true)
+      ).to.be.revertedWith("Dispute not opened");
     });
   });
 

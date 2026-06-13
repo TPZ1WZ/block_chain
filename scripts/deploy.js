@@ -4,7 +4,14 @@ const fs = require("fs");
 const path = require("path");
 
 async function main() {
-  const [deployer, arbiter1, arbiter2, arbiter3] = await ethers.getSigners();
+  const signers = await ethers.getSigners();
+  const deployer = signers[0];
+  const arbiter1 = signers[4]; // Account 5
+  const arbiter2 = signers[9]; // Account 10
+  const arbiter3 = signers[14]; // Account 15
+  const arbiter4 = signers[15]; // Account 16
+  const arbiter5 = signers[16]; // Account 17
+  const arbiter6 = signers[17]; // Account 18
 
   console.log("🚀 Deploying with:", deployer.address);
 
@@ -15,6 +22,9 @@ async function main() {
     arbiter1.address,
     arbiter2.address,
     arbiter3.address,
+    arbiter4.address,
+    arbiter5.address,
+    arbiter6.address,
   ];
   const required = 2;
 

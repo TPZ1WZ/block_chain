@@ -120,6 +120,168 @@ describe("DisputeMultiSig - Comprehensive Tests", function () {
     });
   });
 
+  describe("Staking", function () {
+    it("✅ User can stake to become an arbiter", async function () {
+      const DisputeMultiSig = await ethers.getContractFactory("DisputeMultiSig");
+      const contract = await DisputeMultiSig.deploy(
+        [arbiter1.address, arbiter2.address, arbiter3.address],
+        REQUIRED_VOTES
+      );
+      await contract.waitForDeployment();
+
+      const minStake = await contract.minStake();
+
+      await expect(
+        contract.connect(randomUser).stakeAsArbiter({ value: minStake })
+      )
+        .to.emit(contract, "ArbiterStaked")
+        .withArgs(randomUser.address, minStake, minStake);
+
+      expect(await contract.isArbiter(randomUser.address)).to.equal(true);
+      expect(await contract.stakes(randomUser.address)).to.equal(minStake);
+    });
+
+    it("❌ User cannot become arbiter below min stake", async function () {
+      const DisputeMultiSig = await ethers.getContractFactory("DisputeMultiSig");
+      const contract = await DisputeMultiSig.deploy(
+        [arbiter1.address, arbiter2.address, arbiter3.address],
+        REQUIRED_VOTES
+      );
+      await contract.waitForDeployment();
+
+      const minStake = await contract.minStake();
+
+      await expect(
+        contract.connect(randomUser).stakeAsArbiter({ value: minStake - 1n })
+      ).to.be.revertedWith("Below min stake");
+    });
+
+    it("✅ Minority voters are slashed proportionally to stake", async function () {
+      const DisputeMultiSig = await ethers.getContractFactory("DisputeMultiSig");
+      const contract = await DisputeMultiSig.deploy(
+        [arbiter1.address, arbiter2.address, arbiter3.address],
+        2
+      );
+      await contract.waitForDeployment();
+
+      const TicketBoard = await ethers.getContractFactory("TicketBoard");
+      const localBoard = await TicketBoard.deploy(await contract.getAddress());
+      await localBoard.waitForDeployment();
+
+      await contract.connect(arbiter1).stakeAsArbiter({
+        value: ethers.parseEther("1"),
+      });
+      const block = await ethers.provider.getBlock("latest");
+      const tx = await localBoard
+        .connect(company)
+        .createTicket(TITLE, DETAILS_CID, block.timestamp + 3 * ONE_DAY, {
+          value: TICKET_VALUE,
+        });
+      const receipt = await tx.wait();
+      const event = receipt.logs.find((l) => l.fragment?.name === "TicketCreated");
+      const instance = await ethers.getContractAt("TicketEscrow", event.args.escrow);
+
+      await instance.connect(worker).claimTicket();
+      await instance.connect(worker).submitProof(PROOF_CID, PROOF_NOTE);
+      await instance.connect(company).disputeByCompany();
+
+      const highStakeBefore = await contract.stakes(arbiter1.address);
+      const expectedPenalty = (highStakeBefore * (await contract.slashBps())) / 10000n;
+
+      await contract.connect(arbiter1).vote(event.args.escrow, false);
+      await contract.connect(arbiter2).vote(event.args.escrow, true);
+      await contract.connect(arbiter3).vote(event.args.escrow, true);
+
+      const highPenalty =
+        highStakeBefore - (await contract.stakes(arbiter1.address));
+
+      expect(highPenalty).to.equal(expectedPenalty);
+      expect(await contract.penaltyPool()).to.be.lessThan(highPenalty);
+    });
+  });
+
+  describe("Expertise and Decline", function () {
+    it("✅ Only arbiters with matching expertise are eligible", async function () {
+      const DisputeMultiSig = await ethers.getContractFactory("DisputeMultiSig");
+      const contract = await DisputeMultiSig.deploy(
+        [arbiter1.address, arbiter2.address, arbiter3.address, arbiter4.address],
+        REQUIRED_VOTES
+      );
+      await contract.waitForDeployment();
+
+      await contract.connect(arbiter1).setExpertiseMask(2);
+      await contract.connect(arbiter2).setExpertiseMask(2);
+      await contract.connect(arbiter3).setExpertiseMask(1);
+      await contract.connect(arbiter4).setExpertiseMask(1);
+
+      const TicketBoard = await ethers.getContractFactory("TicketBoard");
+      const localBoard = await TicketBoard.deploy(await contract.getAddress());
+      await localBoard.waitForDeployment();
+
+      const block = await ethers.provider.getBlock("latest");
+      const tx = await localBoard
+        .connect(company)
+        .createTicketWithCategory(TITLE, DETAILS_CID, block.timestamp + 3 * ONE_DAY, 1, {
+          value: TICKET_VALUE,
+        });
+      const receipt = await tx.wait();
+      const event = receipt.logs.find((l) => l.fragment?.name === "TicketCreated");
+      const instance = await ethers.getContractAt("TicketEscrow", event.args.escrow);
+
+      await instance.connect(worker).claimTicket();
+      await instance.connect(worker).submitProof(PROOF_CID, PROOF_NOTE);
+      await expect(instance.connect(company).disputeByCompany()).to.be.revertedWith(
+        "Not enough arbiters"
+      );
+
+      await contract.connect(arbiter3).setExpertiseMask(2);
+      await expect(instance.connect(company).disputeByCompany()).to.emit(
+        contract,
+        "DisputePanelSelected"
+      );
+    });
+
+    it("✅ Selected arbiter can decline and be replaced", async function () {
+      const DisputeMultiSig = await ethers.getContractFactory("DisputeMultiSig");
+      const contract = await DisputeMultiSig.deploy(
+        [arbiter1.address, arbiter2.address, arbiter3.address, arbiter4.address],
+        REQUIRED_VOTES
+      );
+      await contract.waitForDeployment();
+
+      const TicketBoard = await ethers.getContractFactory("TicketBoard");
+      const localBoard = await TicketBoard.deploy(await contract.getAddress());
+      await localBoard.waitForDeployment();
+
+      const block = await ethers.provider.getBlock("latest");
+      const tx = await localBoard
+        .connect(company)
+        .createTicketWithCategory(TITLE, DETAILS_CID, block.timestamp + 3 * ONE_DAY, 0, {
+          value: TICKET_VALUE,
+        });
+      const receipt = await tx.wait();
+      const event = receipt.logs.find((l) => l.fragment?.name === "TicketCreated");
+      const instance = await ethers.getContractAt("TicketEscrow", event.args.escrow);
+
+      await instance.connect(worker).claimTicket();
+      await instance.connect(worker).submitProof(PROOF_CID, PROOF_NOTE);
+      await instance.connect(company).disputeByCompany();
+
+      const before = await contract.getSelectedArbiters(event.args.escrow);
+      const declined = before[0];
+      const declineSigner = [arbiter1, arbiter2, arbiter3, arbiter4].find(
+        (item) => item.address === declined
+      );
+
+      await expect(contract.connect(declineSigner).declineDispute(event.args.escrow))
+        .to.emit(contract, "ArbiterDeclined");
+
+      const after = await contract.getSelectedArbiters(event.args.escrow);
+      expect(after).to.have.length(3);
+      expect(after).to.not.include(declined);
+    });
+  });
+
   describe("Voting", function () {
     beforeEach(async function () {
       const DisputeMultiSig = await ethers.getContractFactory("DisputeMultiSig");
