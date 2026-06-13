@@ -6,12 +6,6 @@ const path = require("path");
 async function main() {
   const signers = await ethers.getSigners();
   const deployer = signers[0];
-  const arbiter1 = signers[4]; // Account 5
-  const arbiter2 = signers[9]; // Account 10
-  const arbiter3 = signers[14]; // Account 15
-  const arbiter4 = signers[15]; // Account 16
-  const arbiter5 = signers[16]; // Account 17
-  const arbiter6 = signers[17]; // Account 18
 
   console.log("🚀 Deploying with:", deployer.address);
 
@@ -19,12 +13,9 @@ async function main() {
    * 1. Deploy DisputeMultiSig
    * -------------------------------------------------- */
   const arbiters = [
-    arbiter1.address,
-    arbiter2.address,
-    arbiter3.address,
-    arbiter4.address,
-    arbiter5.address,
-    arbiter6.address,
+    "0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65", // Account #4
+    "0x976EA74026E726554dB657fA54763abd0C3a0aa9", // Account #6
+    "0xa0Ee7A142d267C1f36714E4a8F75612F20a79720", // Account #9
   ];
   const required = 2;
 

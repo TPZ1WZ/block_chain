@@ -354,6 +354,8 @@ export default function App() {
       if (action.type === "cancel") return escrow.cancelOpenTicket();
       if (action.type === "approve") return escrow.approveSubmission();
       if (action.type === "resubmit") return escrow.requestResubmission(payload.reason);
+      if (action.type === "reclaim") return escrow.reclaimAbandonedTicket();
+      if (action.type === "progress-round") return escrow.progressDisputeRound();
       if (action.type === "company-dispute") {
         return escrow.disputeByCompany({ gasLimit: 900000 });
       }

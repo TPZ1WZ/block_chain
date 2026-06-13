@@ -7,6 +7,7 @@ interface IEscrowFactory {
 
 interface IDisputeCoordinator {
     function openDispute(address ticket) external;
+    function progressRound(address ticket) external;
 }
 
 contract TicketEscrow {
@@ -25,6 +26,7 @@ contract TicketEscrow {
     uint256 public claimedAt;
     uint256 public submittedAt;
     uint256 public approvedAt;
+    uint256 public disputeOpenedAt;
 
     /// @notice DisputeMultiSig contract
     address public arbiter;
@@ -180,6 +182,7 @@ contract TicketEscrow {
         string calldata _proofNote
     ) external onlyWorker {
         require(status == Status.Claimed, "Invalid state");
+        require(block.timestamp <= deadline, "Deadline da qua");
         require(bytes(_proofCID).length > 0, "Proof CID required");
 
         proofCID = _proofCID;
@@ -231,11 +234,24 @@ contract TicketEscrow {
         emit TicketCancelled(company, refund);
     }
 
-    /// @notice Công ty mở tranh chấp sau khi worker đã submit
+    /// @notice Công ty lấy lại ETH khi worker đã claim nhưng không nộp proof sau deadline
+    function reclaimAbandonedTicket() external onlyCompany {
+        require(status == Status.Claimed, "Not claimed");
+        require(block.timestamp > deadline, "Deadline chua het");
+
+        status = Status.Refunded;
+
+        uint256 refund = _refundCompany();
+        emit Refunded(company, refund);
+    }
+
+    /// @notice Công ty mở tranh chấp sau khi worker đã submit — chỉ được sau deadline
     function disputeByCompany() external onlyCompany {
         require(status == Status.Submitted, "Not submitted");
+        require(block.timestamp > deadline, "Deadline chua het");
 
         status = Status.Disputed;
+        disputeOpenedAt = block.timestamp;
         IDisputeCoordinator(arbiter).openDispute(address(this));
         emit DisputeOpened(msg.sender);
     }
@@ -250,8 +266,17 @@ contract TicketEscrow {
         require(block.timestamp > deadline, "Deadline not passed");
 
         status = Status.Disputed;
+        disputeOpenedAt = block.timestamp;
         IDisputeCoordinator(arbiter).openDispute(address(this));
         emit DisputeOpened(msg.sender);
+    }
+
+    /// @notice Bất kỳ ai cũng có thể gọi sau khi round deadline qua
+    /// Slash arbiter lười → thay thế → gia hạn, hoặc auto-resolve nếu hết vòng
+    function progressDisputeRound() external {
+        require(status == Status.Disputed, "Not disputed");
+        require(disputeOpenedAt > 0, "Dispute not opened");
+        IDisputeCoordinator(arbiter).progressRound(address(this));
     }
 
     /* =====================================================

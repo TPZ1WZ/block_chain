@@ -202,6 +202,20 @@
     },
     {
       "inputs": [],
+      "name": "reclaimAbandonedTicket",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "progressDisputeRound",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [],
       "name": "category",
       "outputs": [
         {

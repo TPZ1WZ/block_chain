@@ -285,6 +285,24 @@
       "type": "function"
     },
     {
+      "inputs": [{ "internalType": "address", "name": "ticket", "type": "address" }],
+      "name": "progressRound",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [{ "internalType": "address", "name": "ticket", "type": "address" }],
+      "name": "getRoundInfo",
+      "outputs": [
+        { "internalType": "uint8",   "name": "round",         "type": "uint8"   },
+        { "internalType": "uint256", "name": "roundDeadline", "type": "uint256" },
+        { "internalType": "bool",    "name": "expired",       "type": "bool"    }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
       "inputs": [
         {
           "internalType": "address",

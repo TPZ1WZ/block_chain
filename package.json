@@ -8,7 +8,8 @@
     "test:coverage": "npx hardhat coverage",
     "compile": "npx hardhat compile",
     "clean": "npx hardhat clean",
-    "ipfs:server": "node server/ipfs-server.js"
+    "ipfs:server": "node server/ipfs-server.js",
+    "watcher": "node scripts/dispute-watcher.js"
   },
   "keywords": [],
   "author": "",

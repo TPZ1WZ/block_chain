@@ -36,11 +36,19 @@ contract DisputeMultiSig {
     uint256 private constant MIN_REPUTATION = 10;
     uint256 private constant MAX_REPUTATION = 200;
 
+    uint256 public constant INITIAL_VOTE_DEADLINE = 7 days;
+    uint256 public constant EXTENSION_HOURS      = 3 days;
+    uint256 public constant MAX_ROUNDS           = 3;
+    uint256 public constant LIGHT_SLASH_BPS      = 500; // 5%
+
     struct VoteState {
         uint256 votesForWorker;
         uint256 votesForCompany;
         bool opened;
         bool resolved;
+        uint256 openedAt;
+        uint256 roundDeadline;
+        uint8   currentRound;
         address[] selectedArbiters;
         mapping(address => bool) isSelected;
         mapping(address => bool) hasVoted;
@@ -140,7 +148,10 @@ contract DisputeMultiSig {
 
         require(eligible >= panelSize, "Not enough arbiters");
 
-        v.opened = true;
+        v.opened       = true;
+        v.openedAt     = block.timestamp;
+        v.roundDeadline = block.timestamp + INITIAL_VOTE_DEADLINE;
+        v.currentRound = 1;
         _selectPanel(ticket, company, worker, category);
 
         emit DisputePanelSelected(ticket, v.selectedArbiters);
@@ -205,6 +216,72 @@ contract DisputeMultiSig {
         } else if (v.votesForCompany >= required) {
             _resolve(ticket, false);
         }
+    }
+
+    /// @notice Gọi sau khi roundDeadline qua — slash arbiter lười, thay thế, gia hạn thêm.
+    /// Nếu đã hết MAX_ROUNDS hoặc không còn arbiter thay thế → auto-resolve.
+    function progressRound(address ticket) external {
+        VoteState storage v = disputes[ticket];
+        require(v.opened && !v.resolved, "No active dispute");
+        require(block.timestamp > v.roundDeadline, "Round not expired");
+
+        address company = IFreelanceEscrow(ticket).company();
+        address worker  = IFreelanceEscrow(ticket).worker();
+        uint8 category  = IFreelanceEscrow(ticket).category();
+
+        bool anyReplaced = false;
+
+        for (uint256 i = 0; i < v.selectedArbiters.length; i++) {
+            address arb = v.selectedArbiters[i];
+            if (arb == address(0)) continue;
+            if (!v.isSelected[arb]) continue;
+            if (v.hasVoted[arb]) continue;
+
+            // Slash nhẹ 5%
+            uint256 penalty = (stakes[arb] * LIGHT_SLASH_BPS) / 10_000;
+            if (penalty > 0 && withdrawableStake[arb] >= penalty) {
+                stakes[arb] -= penalty;
+                withdrawableStake[arb] -= penalty;
+                penaltyPool += penalty;
+                emit ArbiterSlashed(ticket, arb, penalty);
+            }
+            _decreaseReputation(arb);
+            if (stakes[arb] < minStake) isArbiter[arb] = false;
+            v.isSelected[arb] = false;
+            activeAssignments[arb]--;
+
+            // Tìm người thay thế
+            address replacement = _selectOne(
+                ticket, company, worker, category,
+                i + uint256(v.currentRound) * 7777
+            );
+            if (replacement != address(0)) {
+                v.selectedArbiters[i] = replacement;
+                anyReplaced = true;
+                emit ArbiterDeclined(ticket, arb, replacement);
+            } else {
+                v.selectedArbiters[i] = address(0);
+            }
+        }
+
+        // Hết vòng tối đa hoặc không còn ai thay thế → auto-resolve
+        if (v.currentRound >= MAX_ROUNDS || !anyReplaced) {
+            bool payWorker = v.votesForWorker > v.votesForCompany;
+            _resolve(ticket, payWorker);
+            return;
+        }
+
+        // Gia hạn thêm vòng mới
+        v.currentRound++;
+        v.roundDeadline = block.timestamp + EXTENSION_HOURS;
+    }
+
+    /// @notice Xem thời hạn vote còn lại của vòng hiện tại
+    function getRoundInfo(address ticket) external view returns (
+        uint8 round, uint256 roundDeadline, bool expired
+    ) {
+        VoteState storage v = disputes[ticket];
+        return (v.currentRound, v.roundDeadline, block.timestamp > v.roundDeadline);
     }
 
     function getVotes(

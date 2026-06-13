@@ -8,6 +8,7 @@ import {
   ExternalLink,
   FileCheck2,
   GitPullRequestDraft,
+  RotateCcw,
   Scale,
   Send,
   Ticket,
@@ -81,7 +82,10 @@ export default function TicketDetailPanel({
   const isClaimed = ticket.status === 1;
   const isSubmitted = ticket.status === 2;
   const isDisputed = ticket.status === 3;
-  const canWorkerDispute = isSubmitted && ticket.deadline < currentTime;
+  const isDeadlinePassed = ticket.deadline < currentTime;
+  const canWorkerDispute = isSubmitted && isDeadlinePassed;
+  const canCompanyDispute = isSubmitted && isDeadlinePassed;
+  const canCompanyReclaim = isClaimed && isDeadlinePassed;
   const detailsUrl = ipfsToGatewayUrl(ticket.detailsCID);
   const proofUrl = ipfsToGatewayUrl(ticket.proofCID);
 
@@ -255,8 +259,8 @@ export default function TicketDetailPanel({
               <ActionButton
                 icon={Scale}
                 tone="danger"
-                disabled={disabled}
-                label="Mở tranh chấp"
+                disabled={disabled || !canCompanyDispute}
+                label={canCompanyDispute ? "Mở tranh chấp" : "Chờ hết deadline"}
                 onClick={() =>
                   onAction(ticket, {
                     type: "company-dispute",
@@ -301,6 +305,50 @@ export default function TicketDetailPanel({
           />
         )}
 
+        {isDisputed && (
+          <div className="rounded-3xl border border-violet-100 bg-violet-50/60 p-4">
+            <h4 className="flex items-center gap-2 text-sm font-black text-violet-900">
+              <Scale className="h-4 w-4" />
+              Vòng bỏ phiếu hết hạn?
+            </h4>
+            <p className="mt-1 text-xs text-violet-700">
+              Nếu Arbiter không vote đúng hạn, bất kỳ ai cũng có thể kích hoạt vòng mới — Arbiter lười bị slash 5% và thay thế bằng người khác.
+            </p>
+            <ActionButton
+              icon={RotateCcw}
+              tone="warning"
+              disabled={disabled}
+              label="Gia hạn vòng mới"
+              className="mt-3"
+              onClick={() =>
+                onAction(ticket, { type: "progress-round", label: "Gia hạn vòng mới" })
+              }
+            />
+          </div>
+        )}
+
+        {role.isCompany && canCompanyReclaim && (
+          <div className="rounded-3xl border border-red-100 bg-red-50/80 p-4">
+            <h4 className="flex items-center gap-2 text-sm font-black text-red-900">
+              <AlertTriangle className="h-4 w-4" />
+              Worker đã bỏ trốn
+            </h4>
+            <p className="mt-1 text-xs text-red-700">
+              Deadline đã qua nhưng Worker không nộp minh chứng. Bạn có thể lấy lại toàn bộ ETH đã ký quỹ.
+            </p>
+            <ActionButton
+              icon={RotateCcw}
+              tone="danger"
+              disabled={disabled}
+              label="Lấy lại ETH"
+              className="mt-3"
+              onClick={() =>
+                onAction(ticket, { type: "reclaim", label: "Lấy lại ETH" })
+              }
+            />
+          </div>
+        )}
+
         {role.isArbiter && isDisputed && (
           <div className="rounded-3xl border border-violet-100 bg-violet-50/80 p-4">
             <h4 className="flex items-center gap-2 text-sm font-black text-violet-900">
@@ -339,21 +387,6 @@ export default function TicketDetailPanel({
               <p className="mt-2 rounded-2xl bg-white/80 px-3 py-2 text-xs font-bold text-violet-700 ring-1 ring-violet-100">
                 Ví arbiter này đã bỏ phiếu cho ticket này.
               </p>
-            )}
-            {!hasCurrentArbiterVoted && (
-              <button
-                type="button"
-                disabled={disabled}
-                onClick={() =>
-                  onAction(ticket, {
-                    type: "decline-dispute",
-                    label: "Tu choi xu ly tranh chap",
-                  })
-                }
-                className="mt-3 w-full rounded-2xl border border-violet-100 bg-white px-4 py-3 text-xs font-black text-violet-700 transition hover:bg-violet-50 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Tu choi xu ly tranh chap
-              </button>
             )}
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <ActionButton
