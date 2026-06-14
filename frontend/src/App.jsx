@@ -76,6 +76,7 @@ export default function App() {
   const [currentTime, setCurrentTime] = useState(() =>
     Math.floor(Date.now() / 1000)
   );
+  const [eventNotifications, setEventNotifications] = useState([]);
   const [toasts, setToasts] = useState([]);
 
   const isConnected = Boolean(signer && address);
@@ -556,6 +557,222 @@ export default function App() {
     };
   }, [address, arbiters, tickets]);
 
+  useEffect(() => {
+    if (!address) {
+      setEventNotifications([]);
+      return;
+    }
+
+    let cancelled = false;
+    const readProvider = getReadProvider();
+    const multisig = getMultiSig(readProvider);
+    const cleanupListeners = [];
+
+    function eventId(event, prefix) {
+      return `${prefix}-${event.transactionHash}-${event.index ?? event.logIndex ?? 0}`;
+    }
+
+    function eventOrder(event) {
+      return {
+        blockNumber: Number(event.blockNumber ?? 0),
+        index: Number(event.index ?? event.logIndex ?? 0),
+      };
+    }
+
+    function ticketAction(ticketAddress) {
+      const ticket = tickets.find(
+        (item) => item.address.toLowerCase() === ticketAddress.toLowerCase()
+      );
+      if (!ticket) return undefined;
+      return () => {
+        setSelectedTicket(ticket);
+        setActivePage("board");
+      };
+    }
+
+    async function loadAccountEventNotifications() {
+      try {
+        const latestBlock = await readProvider.getBlockNumber();
+        const fromBlock = Math.max(0, latestBlock - 5000);
+
+        const [
+          rewardEvents,
+          slashEvents,
+          participantPenaltyEvents,
+          bountyEvents,
+        ] = await Promise.all([
+          multisig.queryFilter(
+            multisig.filters.ArbiterRewarded(null, address),
+            fromBlock,
+            latestBlock
+          ),
+          multisig.queryFilter(
+            multisig.filters.ArbiterSlashed(null, address),
+            fromBlock,
+            latestBlock
+          ),
+          multisig.queryFilter(
+            multisig.filters.ParticipantPenalized(null, address),
+            fromBlock,
+            latestBlock
+          ),
+          multisig.queryFilter(
+            multisig.filters.ProgressBountyPaid(null, address),
+            fromBlock,
+            latestBlock
+          ),
+        ]);
+
+        const items = [];
+
+        for (const event of rewardEvents) {
+          const amount = event.args.amount;
+          const ticket = event.args.ticket;
+          items.push({
+            id: eventId(event, "arbiter-reward"),
+            icon: "ETH",
+            title: "Da nhan thuong arbiter",
+            body: `Ban nhan ${formatEth(amount)} ETH tu dispute fee.`,
+            onClick: ticketAction(ticket),
+            ...eventOrder(event),
+          });
+        }
+
+        for (const event of slashEvents) {
+          const amount = event.args.amount;
+          const ticket = event.args.ticket;
+          items.push({
+            id: eventId(event, "arbiter-slash"),
+            icon: "!",
+            title: "Bi phat stake arbiter",
+            body: `Ban bi slash ${formatEth(amount)} ETH do vote sai hoac khong vote.`,
+            onClick: ticketAction(ticket),
+            ...eventOrder(event),
+          });
+        }
+
+        for (const event of participantPenaltyEvents) {
+          const ticket = event.args.ticket;
+          const strikes = Number(event.args.strikes);
+          const banned = Boolean(event.args.banned);
+          items.push({
+            id: eventId(event, "participant-penalty"),
+            icon: banned ? "BAN" : "!",
+            title: banned ? "Tai khoan da bi ban" : "Bi ghi nhan vi pham",
+            body: banned
+              ? `Ban da dat ${strikes}/3 strikes va bi chan thao tac moi.`
+              : `Ban dang co ${strikes}/3 strikes sau tranh chap.`,
+            onClick: ticketAction(ticket),
+            ...eventOrder(event),
+          });
+        }
+
+        for (const event of bountyEvents) {
+          const amount = event.args.amount;
+          const ticket = event.args.ticket;
+          items.push({
+            id: eventId(event, "progress-bounty"),
+            icon: "ETH",
+            title: "Da nhan bounty xu ly tranh chap",
+            body: `Ban nhan ${formatEth(amount)} ETH tu penalty pool.`,
+            onClick: ticketAction(ticket),
+            ...eventOrder(event),
+          });
+        }
+
+        const escrowEventGroups = await Promise.all(
+          tickets.map(async (ticket) => {
+            const escrow = getTicketEscrow(ticket.address, readProvider);
+            const [paidEvents, refundedEvents, cancelledEvents] =
+              await Promise.all([
+                escrow.queryFilter(escrow.filters.Paid(address), fromBlock, latestBlock),
+                escrow.queryFilter(
+                  escrow.filters.Refunded(address),
+                  fromBlock,
+                  latestBlock
+                ),
+                escrow.queryFilter(
+                  escrow.filters.TicketCancelled(address),
+                  fromBlock,
+                  latestBlock
+                ),
+              ]);
+
+            return [
+              ...paidEvents.map((event) => ({
+                id: eventId(event, "ticket-paid"),
+                icon: "ETH",
+                title: "Da nhan thanh toan",
+                body: `"${ticket.title}" da tra ${formatEth(event.args.amount)} ETH cho Worker.`,
+                onClick: ticketAction(ticket.address),
+                ...eventOrder(event),
+              })),
+              ...refundedEvents.map((event) => ({
+                id: eventId(event, "ticket-refunded"),
+                icon: "ETH",
+                title: "Da duoc hoan tien",
+                body: `"${ticket.title}" da hoan ${formatEth(event.args.amount)} ETH cho Company.`,
+                onClick: ticketAction(ticket.address),
+                ...eventOrder(event),
+              })),
+              ...cancelledEvents.map((event) => ({
+                id: eventId(event, "ticket-cancelled"),
+                icon: "ETH",
+                title: "Ticket da huy va hoan tien",
+                body: `"${ticket.title}" da hoan ${formatEth(event.args.amount)} ETH.`,
+                onClick: ticketAction(ticket.address),
+                ...eventOrder(event),
+              })),
+            ];
+          })
+        );
+
+        items.push(...escrowEventGroups.flat());
+        items.sort(
+          (a, b) => b.blockNumber - a.blockNumber || b.index - a.index
+        );
+
+        if (!cancelled) {
+          setEventNotifications(items.slice(0, 20));
+        }
+      } catch (error) {
+        console.error("loadAccountEventNotifications failed", error);
+        if (!cancelled) {
+          setEventNotifications([]);
+        }
+      }
+    }
+
+    function watch(contract, filter) {
+      const reload = () => {
+        loadAccountEventNotifications();
+      };
+      contract.on(filter, reload);
+      cleanupListeners.push(() => contract.off(filter, reload));
+    }
+
+    loadAccountEventNotifications();
+
+    watch(multisig, multisig.filters.ArbiterRewarded(null, address));
+    watch(multisig, multisig.filters.ArbiterSlashed(null, address));
+    watch(multisig, multisig.filters.ParticipantPenalized(null, address));
+    watch(multisig, multisig.filters.ProgressBountyPaid(null, address));
+
+    for (const ticket of tickets) {
+      const escrow = getTicketEscrow(ticket.address, readProvider);
+      watch(escrow, escrow.filters.Paid(address));
+      watch(escrow, escrow.filters.Refunded(address));
+      watch(escrow, escrow.filters.TicketCancelled(address));
+    }
+
+    return () => {
+      cancelled = true;
+      for (const cleanup of cleanupListeners) {
+        cleanup();
+      }
+    };
+  }, [address, tickets]);
+
   const stats = useMemo(() => {
     const open = tickets.filter((ticket) => ticket.status === 0).length;
     const active = tickets.filter((ticket) => [1, 2].includes(ticket.status)).length;
@@ -922,8 +1139,9 @@ export default function App() {
   }
 
   const notifications = useMemo(() => {
-    if (!address || !tickets.length) return [];
-    const result = [];
+    if (!address) return [];
+    const result = [...eventNotifications];
+    if (!tickets.length) return result;
     const addr = address.toLowerCase();
     const isCurrentArbiter = arbiters.some((item) => item.toLowerCase() === addr);
     for (const t of tickets) {
@@ -959,7 +1177,15 @@ export default function App() {
       }
     }
     return result;
-  }, [address, arbiters, arbiterAssignmentMap, arbiterVoteMap, currentTime, tickets]);
+  }, [
+    address,
+    arbiters,
+    arbiterAssignmentMap,
+    arbiterVoteMap,
+    currentTime,
+    eventNotifications,
+    tickets,
+  ]);
 
   return (
     <Layout
