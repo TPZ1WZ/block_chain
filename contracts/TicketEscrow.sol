@@ -31,6 +31,10 @@ contract TicketEscrow {
     uint256 public submittedAt;
     uint256 public approvedAt;
     uint256 public disputeOpenedAt;
+    uint256 public resubmissionCount;
+
+    uint256 public constant MAX_RESUBMISSION_REQUESTS = 3;
+    uint256 public constant MIN_RESUBMISSION_WINDOW = 1 days;
 
     /// @notice DisputeMultiSig contract
     address public arbiter;
@@ -68,7 +72,12 @@ contract TicketEscrow {
         string proofNote,
         uint256 submittedAt
     );
-    event SubmissionRejected(string reason, uint256 timestamp);
+    event SubmissionRejected(
+        string reason,
+        uint256 timestamp,
+        uint256 newDeadline,
+        uint256 resubmissionCount
+    );
     event DisputeOpened(address indexed openedBy);
     event Paid(address indexed worker, uint256 amount);
     event Refunded(address indexed company, uint256 amount);
@@ -218,7 +227,16 @@ contract TicketEscrow {
         string calldata reason
     ) external onlyCompany {
         require(status == Status.Submitted, "Not submitted");
+        require(block.timestamp <= deadline, "Deadline da qua");
         require(bytes(reason).length > 0, "Reason required");
+        require(resubmissionCount < MAX_RESUBMISSION_REQUESTS, "Resubmission limit reached");
+
+        resubmissionCount += 1;
+
+        uint256 minimumDeadline = block.timestamp + MIN_RESUBMISSION_WINDOW;
+        if (deadline < minimumDeadline) {
+            deadline = minimumDeadline;
+        }
 
         rejectionReason = reason;
         proofCID = "";
@@ -226,7 +244,7 @@ contract TicketEscrow {
         submittedAt = 0;
         status = Status.Claimed;
 
-        emit SubmissionRejected(reason, block.timestamp);
+        emit SubmissionRejected(reason, block.timestamp, deadline, resubmissionCount);
     }
 
     /// @notice Công ty hủy ticket khi chưa có ai nhận

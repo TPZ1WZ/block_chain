@@ -214,6 +214,51 @@ describe("TicketEscrow - Comprehensive Tests", function () {
       expect(await ticket.proofCID()).to.equal("");
       expect(await ticket.proofNote()).to.equal("");
       expect(await ticket.rejectionReason()).to.equal("Photos are unclear");
+      expect(await ticket.resubmissionCount()).to.equal(1);
+    });
+
+    it("✅ Resubmission keeps deadline when worker still has enough time", async function () {
+      const oldDeadline = await ticket.deadline();
+
+      await ticket.connect(company).requestResubmission("Photos are unclear");
+
+      expect(await ticket.deadline()).to.equal(oldDeadline);
+    });
+
+    it("✅ Resubmission extends deadline when requested too close to expiry", async function () {
+      const oldDeadline = await ticket.deadline();
+      await ethers.provider.send("evm_setNextBlockTimestamp", [
+        Number(oldDeadline) - 60,
+      ]);
+
+      const tx = await ticket
+        .connect(company)
+        .requestResubmission("Need clearer photos");
+      const receipt = await tx.wait();
+      const block = await ethers.provider.getBlock(receipt.blockNumber);
+
+      expect(await ticket.deadline()).to.equal(block.timestamp + 24 * 60 * 60);
+    });
+
+    it("❌ Company cannot request resubmission more than three times", async function () {
+      await ticket.connect(company).requestResubmission("Need clearer photos");
+      await ticket.connect(worker).submitProof("ipfs://proof-2", "Second proof");
+      await ticket.connect(company).requestResubmission("Still unclear");
+      await ticket.connect(worker).submitProof("ipfs://proof-3", "Third proof");
+      await ticket.connect(company).requestResubmission("One last revision");
+      await ticket.connect(worker).submitProof("ipfs://proof-4", "Fourth proof");
+
+      await expect(
+        ticket.connect(company).requestResubmission("Again")
+      ).to.be.revertedWith("Resubmission limit reached");
+    });
+
+    it("❌ Company cannot request resubmission after deadline", async function () {
+      await movePastDeadline(ticket);
+
+      await expect(
+        ticket.connect(company).requestResubmission("Too late")
+      ).to.be.revertedWith("Deadline da qua");
     });
 
     it("❌ Cannot approve before submission", async function () {

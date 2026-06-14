@@ -155,6 +155,7 @@ export default function App() {
       submittedAt,
       approvedAt,
       category,
+      resubmissionCount,
     ] = await Promise.all([
       escrow.company(),
       escrow.worker(),
@@ -171,6 +172,7 @@ export default function App() {
       escrow.submittedAt(),
       escrow.approvedAt(),
       escrow.category(),
+      escrow.resubmissionCount(),
     ]);
 
     return {
@@ -190,6 +192,7 @@ export default function App() {
       submittedAt: Number(submittedAt),
       approvedAt: Number(approvedAt),
       category: Number(category),
+      resubmissionCount: Number(resubmissionCount),
     };
   }, []);
 

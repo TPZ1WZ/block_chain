@@ -85,6 +85,9 @@ export default function TicketDetailPanel({
   const canWorkerDispute = isSubmitted && isDeadlinePassed;
   const canCompanyDispute = isSubmitted && isDeadlinePassed;
   const canCompanyReclaim = isClaimed && isDeadlinePassed;
+  const resubmissionCount = ticket.resubmissionCount || 0;
+  const canRequestResubmission =
+    isSubmitted && !isDeadlinePassed && resubmissionCount < 3;
   const detailsUrl = ipfsToGatewayUrl(ticket.detailsCID);
   const proofUrl = ipfsToGatewayUrl(ticket.proofCID);
   const ticketDisputeFee = ticket.amount
@@ -280,6 +283,9 @@ export default function TicketDetailPanel({
               <h4 className="text-sm font-black text-amber-900">
                 Yêu cầu nộp lại
               </h4>
+              <p className="mt-1 text-xs font-semibold text-amber-700">
+                Da dung {resubmissionCount}/3 lan. Neu con duoi 24 gio, deadline se tu dong gia han them 24 gio.
+              </p>
               <textarea
                 value={reason}
                 onChange={(event) => setReason(event.target.value)}
@@ -290,8 +296,14 @@ export default function TicketDetailPanel({
               <ActionButton
                 icon={GitPullRequestDraft}
                 tone="warning"
-                disabled={disabled || !reason.trim()}
-                label="Yêu cầu nộp lại"
+                disabled={disabled || !reason.trim() || !canRequestResubmission}
+                label={
+                  resubmissionCount >= 3
+                    ? "Da het luot nop lai"
+                    : isDeadlinePassed
+                      ? "Deadline da qua"
+                      : "Yeu cau nop lai"
+                }
                 onClick={requestResubmission}
                 className="mt-3"
               />
@@ -466,4 +478,7 @@ function ActionButton({
     </button>
   );
 }
+
+
+
 
