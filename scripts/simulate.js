@@ -3,68 +3,54 @@ const { ethers } = hre;
 const deployment = require("../deployments/localhost.json");
 
 async function main() {
-  const [company, worker, arbiter1, arbiter2, arbiter3] =
-    await ethers.getSigners();
+  const signers = await ethers.getSigners();
+  const [company, worker] = signers;
+  const signerByAddress = new Map(
+    signers.map((signer) => [signer.address.toLowerCase(), signer])
+  );
+  const disputeArbiters = deployment.arbiters.map((address) => {
+    const signer = signerByAddress.get(address.toLowerCase());
+    if (!signer) throw new Error(`Missing local signer for arbiter ${address}`);
+    return signer;
+  });
 
   console.log("=== ACTORS ===");
   console.log("Company   :", company.address);
   console.log("Worker    :", worker.address);
-  console.log("Arbiter 1 :", arbiter1.address);
-  console.log("Arbiter 2 :", arbiter2.address);
-  console.log("Arbiter 3 :", arbiter3.address);
+  console.log("Arbiter 1 :", disputeArbiters[0].address);
+  console.log("Arbiter 2 :", disputeArbiters[1].address);
+  console.log("Arbiter 3 :", disputeArbiters[2]?.address || "-");
 
-  const ticket = await ethers.getContractAt(
-    "TicketEscrow",
-    deployment.demoTicket
-  );
+  const ticket = await ethers.getContractAt("TicketEscrow", deployment.demoTicket);
+  const multisig = await ethers.getContractAt("DisputeMultiSig", deployment.multisig);
 
-  const multisig = await ethers.getContractAt(
-    "DisputeMultiSig",
-    deployment.multisig
-  );
-
-  /* --------------------------------------------------
-   * 1. Worker claims ticket
-   * -------------------------------------------------- */
-  console.log("\n1️⃣ Worker claims ticket");
+  console.log("\n1. Worker claims ticket");
   await (await ticket.connect(worker).claimTicket()).wait();
-  console.log("✅ Ticket claimed");
+  console.log("Ticket claimed");
 
-  /* --------------------------------------------------
-   * 2. Worker submits proof
-   * -------------------------------------------------- */
-  console.log("\n2️⃣ Worker submits proof");
+  console.log("\n2. Worker submits proof");
   const proofCID = "ipfs://demo-proof-image-cid";
   const proofNote = "Completed installation and uploaded site photos";
-
   await (await ticket.connect(worker).submitProof(proofCID, proofNote)).wait();
-  console.log("✅ Proof submitted");
+  console.log("Proof submitted");
 
-  /* --------------------------------------------------
-   * 3. Company opens dispute
-   * -------------------------------------------------- */
-  console.log("\n3️⃣ Company opens dispute");
-  await (await ticket.connect(company).disputeByCompany()).wait();
-  console.log("⚠️ Dispute opened");
+  console.log("\n3. Company opens dispute after ticket deadline");
+  const deadline = await ticket.deadline();
+  await ethers.provider.send("evm_setNextBlockTimestamp", [Number(deadline) + 1]);
+  await ethers.provider.send("evm_mine", []);
 
-  /* --------------------------------------------------
-   * 4. Arbiters vote (2/3 -> PAY worker)
-   * -------------------------------------------------- */
-  console.log("\n4️⃣ Arbiters vote");
+  const disputeFee = await multisig.disputeFeeForTicket(deployment.demoTicket);
+  await (await ticket.connect(company).disputeByCompany({ value: disputeFee })).wait();
+  console.log("Dispute opened with fee:", ethers.formatEther(disputeFee), "ETH");
 
-  await (await multisig.connect(arbiter1).vote(deployment.demoTicket, true)).wait();
-  console.log("🗳️ Arbiter1 voted PAY worker");
+  console.log("\n4. Arbiters vote 2/3 to pay worker");
+  await (await multisig.connect(disputeArbiters[0]).vote(deployment.demoTicket, true)).wait();
+  console.log("Arbiter 1 voted pay worker");
 
-  await (await multisig.connect(arbiter2).vote(deployment.demoTicket, true)).wait();
-  console.log("🗳️ Arbiter2 voted PAY worker");
+  await (await multisig.connect(disputeArbiters[1]).vote(deployment.demoTicket, true)).wait();
+  console.log("Arbiter 2 voted pay worker");
 
-  /* --------------------------------------------------
-   * 5. Final checks
-   * -------------------------------------------------- */
-  const [forWorker, forCompany, resolved] = await multisig.getVotes(
-    deployment.demoTicket
-  );
-
+  const [forWorker, forCompany, resolved] = await multisig.getVotes(deployment.demoTicket);
   const status = await ticket.status();
   const balance = await ethers.provider.getBalance(worker.address);
 
@@ -74,12 +60,11 @@ async function main() {
   console.log("Resolved         :", resolved);
   console.log("Ticket status    :", status.toString());
   console.log("Worker balance   :", ethers.formatEther(balance), "ETH");
-
-  console.log("\n🎉 FULL TICKET → DISPUTE FLOW COMPLETED");
+  console.log("\nFull ticket dispute flow completed");
 }
 
 main().catch((error) => {
-  console.error("\n❌ Simulation failed");
+  console.error("\nSimulation failed");
   console.error(error);
   process.exit(1);
 });

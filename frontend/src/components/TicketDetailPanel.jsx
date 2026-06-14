@@ -34,6 +34,7 @@ export default function TicketDetailPanel({
   hasCurrentArbiterVoted,
   voteSummary,
   requiredVotes,
+  disputeFee,
   selectedDisputeArbiters = [],
   disabled,
   onAction,
@@ -88,6 +89,9 @@ export default function TicketDetailPanel({
   const canCompanyReclaim = isClaimed && isDeadlinePassed;
   const detailsUrl = ipfsToGatewayUrl(ticket.detailsCID);
   const proofUrl = ipfsToGatewayUrl(ticket.proofCID);
+  const ticketDisputeFee = ticket.amount
+    ? formatEth(BigInt(ticket.amount) / 100n)
+    : disputeFee;
 
   async function submitProof() {
     if (!proofCID.trim() && !proofFile) return;
@@ -260,7 +264,11 @@ export default function TicketDetailPanel({
                 icon={Scale}
                 tone="danger"
                 disabled={disabled || !canCompanyDispute}
-                label={canCompanyDispute ? "Mở tranh chấp" : "Chờ hết deadline"}
+                label={
+                  canCompanyDispute
+                    ? `Mở tranh chấp (${ticketDisputeFee} ETH)`
+                    : "Chờ hết deadline"
+                }
                 onClick={() =>
                   onAction(ticket, {
                     type: "company-dispute",
@@ -298,7 +306,7 @@ export default function TicketDetailPanel({
             icon={Scale}
             tone="danger"
             disabled={disabled || !canWorkerDispute}
-            label="Mở tranh chấp"
+            label={`Mở tranh chấp (${ticketDisputeFee} ETH)`}
             onClick={() =>
               onAction(ticket, { type: "worker-dispute", label: "Mở tranh chấp" })
             }
@@ -309,21 +317,11 @@ export default function TicketDetailPanel({
           <div className="rounded-3xl border border-violet-100 bg-violet-50/60 p-4">
             <h4 className="flex items-center gap-2 text-sm font-black text-violet-900">
               <Scale className="h-4 w-4" />
-              Vòng bỏ phiếu hết hạn?
+              Tranh chấp đang được xử lý
             </h4>
             <p className="mt-1 text-xs text-violet-700">
-              Nếu Arbiter không vote đúng hạn, bất kỳ ai cũng có thể kích hoạt vòng mới — Arbiter lười bị slash 5% và thay thế bằng người khác.
+              Nếu Arbiter không vote đúng hạn, hệ thống keeper sẽ tự kích hoạt vòng mới. Arbiter không phản hồi bị phạt vào quỹ penalty và được thay thế bằng Arbiter khác.
             </p>
-            <ActionButton
-              icon={RotateCcw}
-              tone="warning"
-              disabled={disabled}
-              label="Gia hạn vòng mới"
-              className="mt-3"
-              onClick={() =>
-                onAction(ticket, { type: "progress-round", label: "Gia hạn vòng mới" })
-              }
-            />
           </div>
         )}
 
@@ -488,3 +486,4 @@ function ActionButton({
     </button>
   );
 }
+

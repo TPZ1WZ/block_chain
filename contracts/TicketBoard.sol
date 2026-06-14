@@ -82,6 +82,7 @@ contract TicketBoard {
         require(deadline > block.timestamp, "Invalid deadline");
         require(bytes(title).length > 0, "Title required");
         require(category < 5, "Invalid category");
+        require(!IParticipantRules(arbiter).isParticipantBanned(msg.sender), "Company banned");
 
         TicketEscrow escrow = new TicketEscrow();
 

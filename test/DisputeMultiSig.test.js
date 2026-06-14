@@ -14,6 +14,25 @@ describe("DisputeMultiSig - Comprehensive Tests", function () {
   const PROOF_CID = "ipfs://proof-a";
   const PROOF_NOTE = "Done";
 
+  async function movePastDeadline(instance) {
+    const deadline = await instance.deadline();
+    await ethers.provider.send("evm_setNextBlockTimestamp", [Number(deadline) + 1]);
+    await ethers.provider.send("evm_mine", []);
+  }
+
+  async function openCompanyDispute(instance, addr, coordinator = multisig) {
+    await movePastDeadline(instance);
+    const fee = await coordinator.disputeFeeForTicket(addr);
+    return instance.connect(company).disputeByCompany({ value: fee });
+  }
+
+  async function stakeArbiters(contract, arbiters) {
+    const minStake = await contract.minStake();
+    for (const arbiter of arbiters) {
+      await contract.connect(arbiter).stakeAsArbiter({ value: minStake });
+    }
+  }
+
   async function createTicketAndOpenDispute() {
     const block = await ethers.provider.getBlock("latest");
     const deadline = block.timestamp + 3 * ONE_DAY;
@@ -29,7 +48,7 @@ describe("DisputeMultiSig - Comprehensive Tests", function () {
 
     await instance.connect(worker).claimTicket();
     await instance.connect(worker).submitProof(PROOF_CID, PROOF_NOTE);
-    await instance.connect(company).disputeByCompany();
+    await openCompanyDispute(instance, addr);
 
     return { addr, instance };
   }
@@ -163,6 +182,7 @@ describe("DisputeMultiSig - Comprehensive Tests", function () {
         2
       );
       await contract.waitForDeployment();
+      await stakeArbiters(contract, [arbiter1, arbiter2, arbiter3]);
 
       const TicketBoard = await ethers.getContractFactory("TicketBoard");
       const localBoard = await TicketBoard.deploy(await contract.getAddress());
@@ -183,7 +203,7 @@ describe("DisputeMultiSig - Comprehensive Tests", function () {
 
       await instance.connect(worker).claimTicket();
       await instance.connect(worker).submitProof(PROOF_CID, PROOF_NOTE);
-      await instance.connect(company).disputeByCompany();
+      await openCompanyDispute(instance, event.args.escrow, contract);
 
       const highStakeBefore = await contract.stakes(arbiter1.address);
       const expectedPenalty = (highStakeBefore * (await contract.slashBps())) / 10000n;
@@ -208,6 +228,7 @@ describe("DisputeMultiSig - Comprehensive Tests", function () {
         REQUIRED_VOTES
       );
       await contract.waitForDeployment();
+      await stakeArbiters(contract, [arbiter1, arbiter2, arbiter3, arbiter4]);
 
       await contract.connect(arbiter1).setExpertiseMask(2);
       await contract.connect(arbiter2).setExpertiseMask(2);
@@ -230,12 +251,21 @@ describe("DisputeMultiSig - Comprehensive Tests", function () {
 
       await instance.connect(worker).claimTicket();
       await instance.connect(worker).submitProof(PROOF_CID, PROOF_NOTE);
-      await expect(instance.connect(company).disputeByCompany()).to.be.revertedWith(
+      await movePastDeadline(instance);
+      await expect(
+        instance.connect(company).disputeByCompany({
+          value: await contract.disputeFeeForTicket(event.args.escrow),
+        })
+      ).to.be.revertedWith(
         "Not enough arbiters"
       );
 
       await contract.connect(arbiter3).setExpertiseMask(2);
-      await expect(instance.connect(company).disputeByCompany()).to.emit(
+      await expect(
+        instance.connect(company).disputeByCompany({
+          value: await contract.disputeFeeForTicket(event.args.escrow),
+        })
+      ).to.emit(
         contract,
         "DisputePanelSelected"
       );
@@ -248,6 +278,7 @@ describe("DisputeMultiSig - Comprehensive Tests", function () {
         REQUIRED_VOTES
       );
       await contract.waitForDeployment();
+      await stakeArbiters(contract, [arbiter1, arbiter2, arbiter3, arbiter4]);
 
       const TicketBoard = await ethers.getContractFactory("TicketBoard");
       const localBoard = await TicketBoard.deploy(await contract.getAddress());
@@ -265,7 +296,7 @@ describe("DisputeMultiSig - Comprehensive Tests", function () {
 
       await instance.connect(worker).claimTicket();
       await instance.connect(worker).submitProof(PROOF_CID, PROOF_NOTE);
-      await instance.connect(company).disputeByCompany();
+      await openCompanyDispute(instance, event.args.escrow, contract);
 
       const before = await contract.getSelectedArbiters(event.args.escrow);
       const declined = before[0];
@@ -290,6 +321,7 @@ describe("DisputeMultiSig - Comprehensive Tests", function () {
         REQUIRED_VOTES
       );
       await multisig.waitForDeployment();
+      await stakeArbiters(multisig, [arbiter1, arbiter2, arbiter3]);
 
       const TicketBoard = await ethers.getContractFactory("TicketBoard");
       board = await TicketBoard.deploy(await multisig.getAddress());
@@ -362,6 +394,7 @@ describe("DisputeMultiSig - Comprehensive Tests", function () {
         REQUIRED_VOTES
       );
       await multisig.waitForDeployment();
+      await stakeArbiters(multisig, [arbiter1, arbiter2, arbiter3]);
 
       const TicketBoard = await ethers.getContractFactory("TicketBoard");
       board = await TicketBoard.deploy(await multisig.getAddress());
@@ -442,6 +475,7 @@ describe("DisputeMultiSig - Comprehensive Tests", function () {
         REQUIRED_VOTES
       );
       await multisig.waitForDeployment();
+      await stakeArbiters(multisig, [arbiter1, arbiter2, arbiter3]);
 
       const TicketBoard = await ethers.getContractFactory("TicketBoard");
       board = await TicketBoard.deploy(await multisig.getAddress());

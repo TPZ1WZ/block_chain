@@ -14,6 +14,31 @@ describe("TicketEscrow - Comprehensive Tests", function () {
   const PROOF_CID = "ipfs://proof-image-cid";
   const PROOF_NOTE = "Completed and uploaded photos";
 
+  async function movePastDeadline(targetTicket = ticket) {
+    const deadline = await targetTicket.deadline();
+    await ethers.provider.send("evm_setNextBlockTimestamp", [Number(deadline) + 1]);
+    await ethers.provider.send("evm_mine", []);
+  }
+
+  async function openCompanyDispute(targetTicket = ticket, targetAddr = ticketAddr) {
+    await movePastDeadline(targetTicket);
+    const fee = await multisig.disputeFeeForTicket(targetAddr);
+    return targetTicket.connect(company).disputeByCompany({ value: fee });
+  }
+
+  async function openWorkerDispute(targetTicket = ticket, targetAddr = ticketAddr) {
+    await movePastDeadline(targetTicket);
+    const fee = await multisig.disputeFeeForTicket(targetAddr);
+    return targetTicket.connect(worker).disputeByWorker({ value: fee });
+  }
+
+  async function stakeArbiters(contract, arbiters) {
+    const minStake = await contract.minStake();
+    for (const arbiter of arbiters) {
+      await contract.connect(arbiter).stakeAsArbiter({ value: minStake });
+    }
+  }
+
   async function createTicketFor(account = company, value = TICKET_VALUE) {
     const block = await ethers.provider.getBlock("latest");
     const deadline = block.timestamp + 3 * ONE_DAY;
@@ -40,6 +65,7 @@ describe("TicketEscrow - Comprehensive Tests", function () {
       REQUIRED_VOTES
     );
     await multisig.waitForDeployment();
+    await stakeArbiters(multisig, [arbiter1, arbiter2, arbiter3]);
 
     const TicketBoard = await ethers.getContractFactory("TicketBoard");
     board = await TicketBoard.deploy(await multisig.getAddress());
@@ -249,10 +275,10 @@ describe("TicketEscrow - Comprehensive Tests", function () {
       ).to.be.revertedWith("Not submitted");
     });
 
-    it("✅ Company can dispute after proof is submitted", async function () {
+    it("✅ Company can dispute after proof is submitted and deadline passed", async function () {
       await ticket.connect(worker).submitProof(PROOF_CID, PROOF_NOTE);
 
-      await expect(ticket.connect(company).disputeByCompany())
+      await expect(openCompanyDispute())
         .to.emit(ticket, "DisputeOpened")
         .withArgs(company.address);
 
@@ -270,10 +296,7 @@ describe("TicketEscrow - Comprehensive Tests", function () {
     it("✅ Worker can dispute after deadline if company does not respond", async function () {
       await ticket.connect(worker).submitProof(PROOF_CID, PROOF_NOTE);
 
-      await ethers.provider.send("evm_increaseTime", [4 * ONE_DAY]);
-      await ethers.provider.send("evm_mine", []);
-
-      await expect(ticket.connect(worker).disputeByWorker())
+      await expect(openWorkerDispute())
         .to.emit(ticket, "DisputeOpened")
         .withArgs(worker.address);
 
@@ -285,7 +308,7 @@ describe("TicketEscrow - Comprehensive Tests", function () {
     beforeEach(async function () {
       await ticket.connect(worker).claimTicket();
       await ticket.connect(worker).submitProof(PROOF_CID, PROOF_NOTE);
-      await ticket.connect(company).disputeByCompany();
+      await openCompanyDispute();
     });
 
     it("✅ Arbiters vote pay worker -> worker receives funds", async function () {
@@ -356,7 +379,7 @@ describe("TicketEscrow - Comprehensive Tests", function () {
     it("✅ Balance becomes 0 after company refund", async function () {
       await ticket.connect(worker).claimTicket();
       await ticket.connect(worker).submitProof(PROOF_CID, PROOF_NOTE);
-      await ticket.connect(company).disputeByCompany();
+      await openCompanyDispute();
 
       await multisig.connect(arbiter1).vote(ticketAddr, false);
       await multisig.connect(arbiter2).vote(ticketAddr, false);

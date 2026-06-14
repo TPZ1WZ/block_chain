@@ -30,6 +30,36 @@ describe("Edge Cases & Security Tests", function () {
     return { addr, instance, deadline };
   }
 
+  async function movePastDeadline(instance) {
+    const deadline = await instance.deadline();
+    await ethers.provider.send("evm_setNextBlockTimestamp", [Number(deadline) + 1]);
+    await ethers.provider.send("evm_mine", []);
+  }
+
+  async function openCompanyDispute(
+    instance,
+    addr,
+    coordinator = multisig,
+    companySigner = company
+  ) {
+    await movePastDeadline(instance);
+    const fee = await coordinator.disputeFeeForTicket(addr);
+    return instance.connect(companySigner).disputeByCompany({ value: fee });
+  }
+
+  async function openWorkerDispute(instance, addr, coordinator = multisig) {
+    await movePastDeadline(instance);
+    const fee = await coordinator.disputeFeeForTicket(addr);
+    return instance.connect(worker).disputeByWorker({ value: fee });
+  }
+
+  async function stakeArbiters(contract, arbiters) {
+    const minStake = await contract.minStake();
+    for (const arbiter of arbiters) {
+      await contract.connect(arbiter).stakeAsArbiter({ value: minStake });
+    }
+  }
+
   beforeEach(async function () {
     [deployer, company, worker, arbiter1, arbiter2, arbiter3, randomUser] =
       await ethers.getSigners();
@@ -40,6 +70,7 @@ describe("Edge Cases & Security Tests", function () {
       REQUIRED_VOTES
     );
     await multisig.waitForDeployment();
+    await stakeArbiters(multisig, [arbiter1, arbiter2, arbiter3]);
 
     const TicketBoard = await ethers.getContractFactory("TicketBoard");
     board = await TicketBoard.deploy(await multisig.getAddress());
@@ -159,7 +190,7 @@ describe("Edge Cases & Security Tests", function () {
       await ticket.connect(worker).claimTicket();
       await ticket.connect(worker).submitProof(PROOF_CID, PROOF_NOTE);
 
-      await expect(ticket.connect(company).disputeByCompany())
+      await expect(openCompanyDispute(ticket, ticketAddr))
         .to.emit(ticket, "DisputeOpened")
         .withArgs(company.address);
     });
@@ -176,7 +207,7 @@ describe("Edge Cases & Security Tests", function () {
     it("✅ Paid event emitted on dispute resolution (worker wins)", async function () {
       await ticket.connect(worker).claimTicket();
       await ticket.connect(worker).submitProof(PROOF_CID, PROOF_NOTE);
-      await ticket.connect(company).disputeByCompany();
+      await openCompanyDispute(ticket, ticketAddr);
 
       await multisig.connect(arbiter1).vote(ticketAddr, true);
 
@@ -188,7 +219,7 @@ describe("Edge Cases & Security Tests", function () {
     it("✅ Refunded event emitted on dispute resolution (company wins)", async function () {
       await ticket.connect(worker).claimTicket();
       await ticket.connect(worker).submitProof(PROOF_CID, PROOF_NOTE);
-      await ticket.connect(company).disputeByCompany();
+      await openCompanyDispute(ticket, ticketAddr);
 
       await multisig.connect(arbiter1).vote(ticketAddr, false);
 
@@ -249,10 +280,7 @@ describe("Edge Cases & Security Tests", function () {
       await ticket.connect(worker).claimTicket();
       await ticket.connect(worker).submitProof(PROOF_CID, PROOF_NOTE);
 
-      await ethers.provider.send("evm_increaseTime", [4 * ONE_DAY]);
-      await ethers.provider.send("evm_mine", []);
-
-      await expect(ticket.connect(worker).disputeByWorker()).to.not.be.reverted;
+      await expect(openWorkerDispute(ticket, created.addr)).to.not.be.reverted;
     });
   });
 
@@ -264,6 +292,7 @@ describe("Edge Cases & Security Tests", function () {
         1
       );
       await singleArbiterMultisig.waitForDeployment();
+      await stakeArbiters(singleArbiterMultisig, [arbiter1]);
 
       const TicketBoard = await ethers.getContractFactory("TicketBoard");
       const singleBoard = await TicketBoard.deploy(
@@ -286,7 +315,7 @@ describe("Edge Cases & Security Tests", function () {
 
       await ticket1.connect(worker).claimTicket();
       await ticket1.connect(worker).submitProof(PROOF_CID, PROOF_NOTE);
-      await ticket1.connect(company).disputeByCompany();
+      await openCompanyDispute(ticket1, ticketAddr1, singleArbiterMultisig);
 
       await singleArbiterMultisig.connect(arbiter1).vote(ticketAddr1, true);
 
@@ -300,6 +329,7 @@ describe("Edge Cases & Security Tests", function () {
         3
       );
       await fullConsensusMultisig.waitForDeployment();
+      await stakeArbiters(fullConsensusMultisig, [arbiter1, arbiter2, arbiter3]);
 
       const TicketBoard = await ethers.getContractFactory("TicketBoard");
       const consensusBoard = await TicketBoard.deploy(
@@ -325,7 +355,11 @@ describe("Edge Cases & Security Tests", function () {
 
       await consensusTicket.connect(worker).claimTicket();
       await consensusTicket.connect(worker).submitProof(PROOF_CID, PROOF_NOTE);
-      await consensusTicket.connect(company).disputeByCompany();
+      await openCompanyDispute(
+        consensusTicket,
+        consensusTicketAddr,
+        fullConsensusMultisig
+      );
 
       await fullConsensusMultisig.connect(arbiter1).vote(consensusTicketAddr, true);
       await fullConsensusMultisig.connect(arbiter2).vote(consensusTicketAddr, true);
@@ -384,7 +418,7 @@ describe("Edge Cases & Security Tests", function () {
     it("✅ Open -> Claimed -> Submitted -> Disputed -> Paid", async function () {
       await ticket.connect(worker).claimTicket();
       await ticket.connect(worker).submitProof(PROOF_CID, PROOF_NOTE);
-      await ticket.connect(company).disputeByCompany();
+      await openCompanyDispute(ticket, ticketAddr);
       expect(await ticket.status()).to.equal(3); // Disputed
 
       await multisig.connect(arbiter1).vote(ticketAddr, true);
@@ -396,7 +430,7 @@ describe("Edge Cases & Security Tests", function () {
     it("✅ Open -> Claimed -> Submitted -> Disputed -> Refunded", async function () {
       await ticket.connect(worker).claimTicket();
       await ticket.connect(worker).submitProof(PROOF_CID, PROOF_NOTE);
-      await ticket.connect(company).disputeByCompany();
+      await openCompanyDispute(ticket, ticketAddr);
       expect(await ticket.status()).to.equal(3); // Disputed
 
       await multisig.connect(arbiter1).vote(ticketAddr, false);

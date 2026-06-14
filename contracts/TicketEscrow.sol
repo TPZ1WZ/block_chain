@@ -6,8 +6,12 @@ interface IEscrowFactory {
 }
 
 interface IDisputeCoordinator {
-    function openDispute(address ticket) external;
+    function openDispute(address ticket) external payable;
     function progressRound(address ticket) external;
+}
+
+interface IParticipantRules {
+    function isParticipantBanned(address participant) external view returns (bool);
 }
 
 contract TicketEscrow {
@@ -167,6 +171,7 @@ contract TicketEscrow {
         require(status == Status.Open, "Ticket not open");
         require(worker == address(0), "Already claimed");
         require(msg.sender != company, "Company cannot claim");
+        require(!IParticipantRules(arbiter).isParticipantBanned(msg.sender), "Worker banned");
 
         worker = payable(msg.sender);
         claimedAt = block.timestamp;
@@ -246,13 +251,13 @@ contract TicketEscrow {
     }
 
     /// @notice Công ty mở tranh chấp sau khi worker đã submit — chỉ được sau deadline
-    function disputeByCompany() external onlyCompany {
+    function disputeByCompany() external payable onlyCompany {
         require(status == Status.Submitted, "Not submitted");
         require(block.timestamp > deadline, "Deadline chua het");
 
         status = Status.Disputed;
         disputeOpenedAt = block.timestamp;
-        IDisputeCoordinator(arbiter).openDispute(address(this));
+        IDisputeCoordinator(arbiter).openDispute{value: msg.value}(address(this));
         emit DisputeOpened(msg.sender);
     }
 
@@ -261,13 +266,13 @@ contract TicketEscrow {
        =====================================================*/
 
     /// @notice Worker có thể mở dispute nếu đã submit nhưng công ty không phản hồi sau deadline
-    function disputeByWorker() external onlyWorker {
+    function disputeByWorker() external payable onlyWorker {
         require(status == Status.Submitted, "Not submitted");
         require(block.timestamp > deadline, "Deadline not passed");
 
         status = Status.Disputed;
         disputeOpenedAt = block.timestamp;
-        IDisputeCoordinator(arbiter).openDispute(address(this));
+        IDisputeCoordinator(arbiter).openDispute{value: msg.value}(address(this));
         emit DisputeOpened(msg.sender);
     }
 

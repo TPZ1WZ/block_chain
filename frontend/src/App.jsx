@@ -53,6 +53,9 @@ export default function App() {
   const [arbiterStake, setArbiterStake] = useState("0");
   const [isCurrentArbiter, setIsCurrentArbiter] = useState(false);
   const [currentExpertiseMask, setCurrentExpertiseMask] = useState(0);
+  const [participantStrikes, setParticipantStrikes] = useState(0);
+  const [isParticipantBanned, setIsParticipantBanned] = useState(false);
+  const [disputeFee, setDisputeFee] = useState("1% gia tri ticket");
   const [selectedDisputeArbiters, setSelectedDisputeArbiters] = useState([]);
   const [activePage, setActivePage] = useState("overview");
   const [boardTab, setBoardTab] = useState("all");
@@ -230,21 +233,36 @@ export default function App() {
       setArbiters(nextArbiters);
       setRequiredVotes(Number(nextRequired));
 
-      const [nextMinStake, nextStake, nextIsArbiter, nextExpertiseMask] = await Promise.all([
+      const [
+        nextMinStake,
+        nextStake,
+        nextIsArbiter,
+        nextExpertiseMask,
+        nextParticipantStrikes,
+        nextParticipantBanned,
+      ] = await Promise.all([
         multisig.minStake(),
         address ? multisig.stakes(address) : Promise.resolve(0n),
         address ? multisig.isArbiter(address) : Promise.resolve(false),
         address ? multisig.expertiseMask(address) : Promise.resolve(0n),
+        address ? multisig.participantStrikes(address) : Promise.resolve(0n),
+        address ? multisig.isParticipantBanned(address) : Promise.resolve(false),
       ]);
       setMinArbiterStake(formatEth(nextMinStake));
       setArbiterStake(formatEth(nextStake));
       setIsCurrentArbiter(Boolean(nextIsArbiter));
       setCurrentExpertiseMask(Number(nextExpertiseMask));
+      setParticipantStrikes(Number(nextParticipantStrikes));
+      setIsParticipantBanned(Boolean(nextParticipantBanned));
+      setDisputeFee("1% gia tri ticket");
     } catch (error) {
       console.error("loadArbiters failed", error);
       setArbiters([]);
       setIsCurrentArbiter(false);
       setCurrentExpertiseMask(0);
+      setParticipantStrikes(0);
+      setIsParticipantBanned(false);
+      setDisputeFee("1% gia tri ticket");
     }
   }, [address]);
 
@@ -357,10 +375,20 @@ export default function App() {
       if (action.type === "reclaim") return escrow.reclaimAbandonedTicket();
       if (action.type === "progress-round") return escrow.progressDisputeRound();
       if (action.type === "company-dispute") {
-        return escrow.disputeByCompany({ gasLimit: 900000 });
+        const multisig = getMultiSig(getReadProvider());
+        const requiredFee = await multisig.disputeFeeForTicket(ticket.address);
+        return escrow.disputeByCompany({
+          gasLimit: 900000,
+          value: requiredFee,
+        });
       }
       if (action.type === "worker-dispute") {
-        return escrow.disputeByWorker({ gasLimit: 900000 });
+        const multisig = getMultiSig(getReadProvider());
+        const requiredFee = await multisig.disputeFeeForTicket(ticket.address);
+        return escrow.disputeByWorker({
+          gasLimit: 900000,
+          value: requiredFee,
+        });
       }
       if (action.type === "submit-proof") {
         return escrow.submitProof(payload.proofCID, payload.proofNote);
@@ -623,6 +651,7 @@ export default function App() {
               hasCurrentArbiterVoted={hasCurrentArbiterVoted}
               voteSummary={voteSummary}
               requiredVotes={requiredVotes}
+              disputeFee={disputeFee}
               selectedDisputeArbiters={selectedDisputeArbiters}
               disabled={!isConnected || txState.stage !== "idle"}
               onAction={ticketAction}
@@ -655,6 +684,7 @@ export default function App() {
                 hasCurrentArbiterVoted={hasCurrentArbiterVoted}
                 voteSummary={voteSummary}
                 requiredVotes={requiredVotes}
+                disputeFee={disputeFee}
                 selectedDisputeArbiters={selectedDisputeArbiters}
                 disabled={!isConnected || txState.stage !== "idle"}
                 onAction={ticketAction}
@@ -828,6 +858,9 @@ export default function App() {
             ["Chain ID", String(CHAIN_ID)],
             ["TicketBoard", TICKET_BOARD_ADDRESS],
             ["DisputeMultiSig", MULTISIG_ADDRESS],
+            ["Vi pham tranh chap", `${participantStrikes}/3 strikes`],
+            ["Trang thai tai khoan", isParticipantBanned ? "Da bi ban" : "Binh thuong"],
+            ["Phi mo tranh chap", disputeFee],
             ["Giao diện", "Sáng, Web3 SaaS"],
           ]}
         />
@@ -877,6 +910,7 @@ export default function App() {
               hasCurrentArbiterVoted={hasCurrentArbiterVoted}
               voteSummary={voteSummary}
               requiredVotes={requiredVotes}
+              disputeFee={disputeFee}
               selectedDisputeArbiters={selectedDisputeArbiters}
               disabled={!isConnected || txState.stage !== "idle"}
               onAction={ticketAction}

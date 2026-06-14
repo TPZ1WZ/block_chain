@@ -2,7 +2,7 @@ const { expect } = require("chai");
 const { ethers } = require("hardhat");
 
 describe("TicketEscrow + DisputeMultiSig - End-to-End Flow", function () {
-  let deployer, company, worker, arbiter1, arbiter2, arbiter3, randomUser;
+  let company, worker, arbiter1, arbiter2, arbiter3, randomUser;
   let board, multisig;
   let ticket, ticketAddr;
 
@@ -12,9 +12,35 @@ describe("TicketEscrow + DisputeMultiSig - End-to-End Flow", function () {
   const DETAILS_CID = "ipfs://flow-ticket";
   const PROOF_CID = "ipfs://flow-proof";
   const PROOF_NOTE = "Photos uploaded";
+  const TICKET_VALUE = ethers.parseEther("1");
+
+  async function movePastDeadline(targetTicket = ticket) {
+    const deadline = await targetTicket.deadline();
+    await ethers.provider.send("evm_setNextBlockTimestamp", [Number(deadline) + 1]);
+    await ethers.provider.send("evm_mine", []);
+  }
+
+  async function openCompanyDispute(targetTicket = ticket, targetAddr = ticketAddr) {
+    await movePastDeadline(targetTicket);
+    const fee = await multisig.disputeFeeForTicket(targetAddr);
+    return targetTicket.connect(company).disputeByCompany({ value: fee });
+  }
+
+  async function openWorkerDispute(targetTicket = ticket, targetAddr = ticketAddr) {
+    await movePastDeadline(targetTicket);
+    const fee = await multisig.disputeFeeForTicket(targetAddr);
+    return targetTicket.connect(worker).disputeByWorker({ value: fee });
+  }
+
+  async function stakeArbiters(contract, arbiters) {
+    const minStake = await contract.minStake();
+    for (const arbiter of arbiters) {
+      await contract.connect(arbiter).stakeAsArbiter({ value: minStake });
+    }
+  }
 
   beforeEach(async function () {
-    [deployer, company, worker, arbiter1, arbiter2, arbiter3, randomUser] =
+    [, company, worker, arbiter1, arbiter2, arbiter3, randomUser] =
       await ethers.getSigners();
 
     const DisputeMultiSig = await ethers.getContractFactory("DisputeMultiSig");
@@ -23,6 +49,7 @@ describe("TicketEscrow + DisputeMultiSig - End-to-End Flow", function () {
       REQUIRED_VOTES
     );
     await multisig.waitForDeployment();
+    await stakeArbiters(multisig, [arbiter1, arbiter2, arbiter3]);
 
     const TicketBoard = await ethers.getContractFactory("TicketBoard");
     board = await TicketBoard.deploy(await multisig.getAddress());
@@ -33,22 +60,19 @@ describe("TicketEscrow + DisputeMultiSig - End-to-End Flow", function () {
 
     const tx = await board
       .connect(company)
-      .createTicket(TITLE, DETAILS_CID, deadline, {
-        value: ethers.parseEther("1"),
-      });
+      .createTicket(TITLE, DETAILS_CID, deadline, { value: TICKET_VALUE });
 
     const receipt = await tx.wait();
     const event = receipt.logs.find((l) => l.fragment?.name === "TicketCreated");
     ticketAddr = event.args.escrow;
-
     ticket = await ethers.getContractAt("TicketEscrow", ticketAddr);
   });
 
-  it("✅ Any non-company user can claim ticket (first-come)", async function () {
+  it("allows any non-company user to claim ticket first", async function () {
     await expect(ticket.connect(worker).claimTicket()).to.not.be.reverted;
   });
 
-  it("❌ Cannot claim ticket twice", async function () {
+  it("prevents double claim", async function () {
     await ticket.connect(worker).claimTicket();
 
     await expect(ticket.connect(randomUser).claimTicket()).to.be.revertedWith(
@@ -56,7 +80,7 @@ describe("TicketEscrow + DisputeMultiSig - End-to-End Flow", function () {
     );
   });
 
-  it("✅ Worker claims and submits proof", async function () {
+  it("lets worker claim and submit proof", async function () {
     await ticket.connect(worker).claimTicket();
 
     await expect(
@@ -64,15 +88,15 @@ describe("TicketEscrow + DisputeMultiSig - End-to-End Flow", function () {
     ).to.not.be.reverted;
   });
 
-  it("✅ Happy path: company approves submission and pays worker", async function () {
+  it("happy path: company approves submission and pays worker", async function () {
     await ticket.connect(worker).claimTicket();
     await ticket.connect(worker).submitProof(PROOF_CID, PROOF_NOTE);
 
     await expect(ticket.connect(company).approveSubmission()).to.not.be.reverted;
-    expect(await ticket.status()).to.equal(4); // Paid
+    expect(await ticket.status()).to.equal(4);
   });
 
-  it("❌ Cannot dispute before submission", async function () {
+  it("prevents dispute before submission", async function () {
     await ticket.connect(worker).claimTicket();
 
     await expect(
@@ -80,61 +104,65 @@ describe("TicketEscrow + DisputeMultiSig - End-to-End Flow", function () {
     ).to.be.revertedWith("Not submitted");
   });
 
-  it("✅ Company can dispute immediately after submission", async function () {
+  it("prevents company dispute before deadline", async function () {
     await ticket.connect(worker).claimTicket();
     await ticket.connect(worker).submitProof(PROOF_CID, PROOF_NOTE);
 
+    const fee = await multisig.disputeFeeForTicket(ticketAddr);
     await expect(
-      ticket.connect(company).disputeByCompany()
-    ).to.not.be.reverted;
-
-    expect(await ticket.status()).to.equal(3); // Disputed
+      ticket.connect(company).disputeByCompany({ value: fee })
+    ).to.be.revertedWith("Deadline chua het");
   });
 
-  it("✅ Worker can dispute after deadline if company does not respond", async function () {
+  it("lets company dispute after deadline with 1 percent fee", async function () {
     await ticket.connect(worker).claimTicket();
     await ticket.connect(worker).submitProof(PROOF_CID, PROOF_NOTE);
 
-    await ethers.provider.send("evm_increaseTime", [4 * ONE_DAY]);
-    await ethers.provider.send("evm_mine", []);
+    const fee = await multisig.disputeFeeForTicket(ticketAddr);
+    expect(fee).to.equal(TICKET_VALUE / 100n);
 
-    await expect(
-      ticket.connect(worker).disputeByWorker()
-    ).to.not.be.reverted;
-
-    expect(await ticket.status()).to.equal(3); // Disputed
+    await expect(openCompanyDispute()).to.not.be.reverted;
+    expect(await ticket.status()).to.equal(3);
   });
 
-  it("🧑‍⚖️ 2/3 arbiters vote -> worker wins", async function () {
+  it("lets worker dispute after deadline with 1 percent fee", async function () {
     await ticket.connect(worker).claimTicket();
     await ticket.connect(worker).submitProof(PROOF_CID, PROOF_NOTE);
-    await ticket.connect(company).disputeByCompany();
+
+    await expect(openWorkerDispute()).to.not.be.reverted;
+    expect(await ticket.status()).to.equal(3);
+  });
+
+  it("resolves 2 of 3 votes to worker", async function () {
+    await ticket.connect(worker).claimTicket();
+    await ticket.connect(worker).submitProof(PROOF_CID, PROOF_NOTE);
+    await openCompanyDispute();
 
     await multisig.connect(arbiter1).vote(ticketAddr, true);
     await multisig.connect(arbiter2).vote(ticketAddr, true);
 
     const [, , resolved] = await multisig.getVotes(ticketAddr);
     expect(resolved).to.equal(true);
-    expect(await ticket.status()).to.equal(4); // Paid
+    expect(await ticket.status()).to.equal(4);
   });
 
-  it("🧑‍⚖️ 2/3 arbiters vote -> company refunded", async function () {
+  it("resolves 2 of 3 votes to company", async function () {
     await ticket.connect(worker).claimTicket();
     await ticket.connect(worker).submitProof(PROOF_CID, PROOF_NOTE);
-    await ticket.connect(company).disputeByCompany();
+    await openCompanyDispute();
 
     await multisig.connect(arbiter1).vote(ticketAddr, false);
     await multisig.connect(arbiter2).vote(ticketAddr, false);
 
     const [, , resolved] = await multisig.getVotes(ticketAddr);
     expect(resolved).to.equal(true);
-    expect(await ticket.status()).to.equal(5); // Refunded
+    expect(await ticket.status()).to.equal(5);
   });
 
-  it("❌ Arbiter cannot vote twice", async function () {
+  it("prevents arbiter from voting twice", async function () {
     await ticket.connect(worker).claimTicket();
     await ticket.connect(worker).submitProof(PROOF_CID, PROOF_NOTE);
-    await ticket.connect(company).disputeByCompany();
+    await openCompanyDispute();
 
     await multisig.connect(arbiter1).vote(ticketAddr, true);
 
@@ -143,20 +171,20 @@ describe("TicketEscrow + DisputeMultiSig - End-to-End Flow", function () {
     ).to.be.revertedWith("Already voted");
   });
 
-  it("❌ Non-arbiter cannot vote", async function () {
+  it("prevents non-arbiter from voting", async function () {
     await ticket.connect(worker).claimTicket();
     await ticket.connect(worker).submitProof(PROOF_CID, PROOF_NOTE);
-    await ticket.connect(company).disputeByCompany();
+    await openCompanyDispute();
 
     await expect(
       multisig.connect(company).vote(ticketAddr, true)
     ).to.be.revertedWith("Not an arbiter");
   });
 
-  it("❌ Cannot resolve dispute twice", async function () {
+  it("prevents voting after dispute resolved", async function () {
     await ticket.connect(worker).claimTicket();
     await ticket.connect(worker).submitProof(PROOF_CID, PROOF_NOTE);
-    await ticket.connect(company).disputeByCompany();
+    await openCompanyDispute();
 
     await multisig.connect(arbiter1).vote(ticketAddr, true);
     await multisig.connect(arbiter2).vote(ticketAddr, true);

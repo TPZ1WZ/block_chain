@@ -10,6 +10,8 @@ interface IFreelanceEscrow {
 
     function category() external view returns (uint8);
 
+    function amount() external view returns (uint256);
+
     function resolveDispute(bool payWorker) external;
 }
 
@@ -23,6 +25,9 @@ contract DisputeMultiSig {
     mapping(address => uint256) public activeAssignments;
     mapping(address => uint256) public expertiseMask;
     mapping(address => uint256) public reputation;
+    mapping(address => uint256) public participantStrikes;
+    mapping(address => bool) public participantBanned;
+    mapping(address => uint256) public disputeRewardPool;
 
     uint256 public required;
     uint256 public panelSize;
@@ -40,6 +45,10 @@ contract DisputeMultiSig {
     uint256 public constant EXTENSION_HOURS      = 3 days;
     uint256 public constant MAX_ROUNDS           = 3;
     uint256 public constant LIGHT_SLASH_BPS      = 500; // 5%
+    uint256 public constant MAX_PARTICIPANT_STRIKES = 3;
+    uint256 public constant DISPUTE_FEE_BPS = 100; // 1%
+    uint256 public constant BPS_DENOMINATOR = 10_000;
+    uint256 public constant MIN_DISPUTE_FEE = 1 wei;
 
     struct VoteState {
         uint256 votesForWorker;
@@ -65,7 +74,21 @@ contract DisputeMultiSig {
     event ExpertiseUpdated(address indexed arbiter, uint256 expertiseMask);
     event ArbiterDeclined(address indexed ticket, address indexed arbiter, address replacement);
     event DisputePanelSelected(address indexed ticket, address[] arbiters);
+    event DisputeFeeDeposited(address indexed ticket, address indexed payer, uint256 amount);
     event Voted(address indexed ticket, address indexed arbiter, bool payWorker);
+    event DisputeRoundProgressed(
+        address indexed ticket,
+        uint8 round,
+        uint256 roundDeadline,
+        bool resolved
+    );
+    event ProgressBountyPaid(address indexed ticket, address indexed caller, uint256 amount);
+    event ParticipantPenalized(
+        address indexed ticket,
+        address indexed participant,
+        uint256 strikes,
+        bool banned
+    );
     event Resolved(address indexed ticket, bool payWorker);
 
     modifier onlyArbiter() {
@@ -134,9 +157,12 @@ contract DisputeMultiSig {
         emit ArbiterUnstaked(msg.sender, amount);
     }
 
-    function openDispute(address ticket) external {
+    function openDispute(address ticket) external payable {
         require(msg.sender == ticket, "Only ticket");
         require(IFreelanceEscrow(ticket).status() == DISPUTED_STATUS, "Ticket not disputed");
+        uint256 requiredFee = disputeFeeForTicket(ticket);
+        require(requiredFee > 0, "Invalid dispute fee");
+        require(msg.value >= requiredFee, "Dispute fee required");
 
         VoteState storage v = disputes[ticket];
         require(!v.opened, "Dispute already opened");
@@ -152,8 +178,10 @@ contract DisputeMultiSig {
         v.openedAt     = block.timestamp;
         v.roundDeadline = block.timestamp + INITIAL_VOTE_DEADLINE;
         v.currentRound = 1;
+        disputeRewardPool[ticket] += msg.value;
         _selectPanel(ticket, company, worker, category);
 
+        emit DisputeFeeDeposited(ticket, tx.origin, msg.value);
         emit DisputePanelSelected(ticket, v.selectedArbiters);
     }
 
@@ -221,6 +249,7 @@ contract DisputeMultiSig {
     /// @notice Gọi sau khi roundDeadline qua — slash arbiter lười, thay thế, gia hạn thêm.
     /// Nếu đã hết MAX_ROUNDS hoặc không còn arbiter thay thế → auto-resolve.
     function progressRound(address ticket) external {
+        uint256 gasStart = gasleft();
         VoteState storage v = disputes[ticket];
         require(v.opened && !v.resolved, "No active dispute");
         require(block.timestamp > v.roundDeadline, "Round not expired");
@@ -237,9 +266,13 @@ contract DisputeMultiSig {
             if (!v.isSelected[arb]) continue;
             if (v.hasVoted[arb]) continue;
 
-            // Slash nhẹ 5%
+            // Slash nhẹ 5%, chỉ lấy từ phần stake có ETH thật backing.
             uint256 penalty = (stakes[arb] * LIGHT_SLASH_BPS) / 10_000;
-            if (penalty > 0 && withdrawableStake[arb] >= penalty) {
+            uint256 backedStake = withdrawableStake[arb];
+            if (penalty > backedStake) {
+                penalty = backedStake;
+            }
+            if (penalty > 0) {
                 stakes[arb] -= penalty;
                 withdrawableStake[arb] -= penalty;
                 penaltyPool += penalty;
@@ -267,6 +300,8 @@ contract DisputeMultiSig {
         // Hết vòng tối đa hoặc không còn ai thay thế → auto-resolve
         if (v.currentRound >= MAX_ROUNDS || !anyReplaced) {
             bool payWorker = v.votesForWorker > v.votesForCompany;
+            _payProgressBounty(ticket, gasStart);
+            emit DisputeRoundProgressed(ticket, v.currentRound, 0, true);
             _resolve(ticket, payWorker);
             return;
         }
@@ -274,6 +309,8 @@ contract DisputeMultiSig {
         // Gia hạn thêm vòng mới
         v.currentRound++;
         v.roundDeadline = block.timestamp + EXTENSION_HOURS;
+        _payProgressBounty(ticket, gasStart);
+        emit DisputeRoundProgressed(ticket, v.currentRound, v.roundDeadline, false);
     }
 
     /// @notice Xem thời hạn vote còn lại của vòng hiện tại
@@ -322,13 +359,21 @@ contract DisputeMultiSig {
         return arbiters;
     }
 
+    function disputeFeeForTicket(address ticket) public view returns (uint256) {
+        uint256 fee = (IFreelanceEscrow(ticket).amount() * DISPUTE_FEE_BPS) / BPS_DENOMINATOR;
+        return fee == 0 ? MIN_DISPUTE_FEE : fee;
+    }
+
+    function isParticipantBanned(address participant) external view returns (bool) {
+        return participantBanned[participant];
+    }
+
     function _addGenesisArbiter(address arbiter) private {
         require(arbiter != address(0), "Zero arbiter");
         require(!isArbiter[arbiter], "Duplicate arbiter");
 
         arbiters.push(arbiter);
         isArbiter[arbiter] = true;
-        stakes[arbiter] = minStake;
         expertiseMask[arbiter] = ALL_CATEGORIES_MASK;
         reputation[arbiter] = BASE_REPUTATION;
     }
@@ -433,9 +478,14 @@ contract DisputeMultiSig {
         v.resolved = true;
         _slashMinority(ticket, payWorker);
         _rewardMajority(ticket, payWorker);
+        _penalizeLosingParticipant(ticket, payWorker);
 
         for (uint256 i = 0; i < v.selectedArbiters.length; i++) {
-            activeAssignments[v.selectedArbiters[i]]--;
+            address arbiter = v.selectedArbiters[i];
+            if (arbiter == address(0)) continue;
+            if (activeAssignments[arbiter] > 0) {
+                activeAssignments[arbiter]--;
+            }
         }
 
         IFreelanceEscrow(ticket).resolveDispute(payWorker);
@@ -479,6 +529,26 @@ contract DisputeMultiSig {
 
     function _rewardMajority(address ticket, bool payWorker) private {
         VoteState storage v = disputes[ticket];
+        uint256 majorityCount = 0;
+
+        for (uint256 i = 0; i < v.selectedArbiters.length; i++) {
+            address arbiter = v.selectedArbiters[i];
+            if (!v.hasVoted[arbiter]) continue;
+            if (v.votedForWorker[arbiter] != payWorker) continue;
+            majorityCount++;
+        }
+
+        uint256 disputeReward = disputeRewardPool[ticket];
+        uint256 disputeShare = 0;
+        if (majorityCount > 0 && disputeReward > 0) {
+            disputeShare = disputeReward / majorityCount;
+            uint256 remainder = disputeReward - (disputeShare * majorityCount);
+            disputeRewardPool[ticket] = 0;
+            penaltyPool += remainder;
+        } else if (disputeReward > 0) {
+            disputeRewardPool[ticket] = 0;
+            penaltyPool += disputeReward;
+        }
 
         for (uint256 i = 0; i < v.selectedArbiters.length; i++) {
             address arbiter = v.selectedArbiters[i];
@@ -486,15 +556,51 @@ contract DisputeMultiSig {
             if (v.votedForWorker[arbiter] != payWorker) continue;
 
             _increaseReputation(arbiter);
-            uint256 reward = (stakes[arbiter] * arbiterFeeBps) / 10_000;
-            if (penaltyPool < reward) reward = penaltyPool;
+            uint256 reward = disputeShare;
+            uint256 penaltyReward = (stakes[arbiter] * arbiterFeeBps) / 10_000;
+            if (penaltyPool < penaltyReward) penaltyReward = penaltyPool;
+            reward += penaltyReward;
             if (reward == 0) continue;
 
-            penaltyPool -= reward;
+            penaltyPool -= penaltyReward;
             withdrawableStake[arbiter] += reward;
             stakes[arbiter] += reward;
             emit ArbiterRewarded(ticket, arbiter, reward);
         }
+    }
+
+    function _payProgressBounty(address ticket, uint256 gasStart) private {
+        if (penaltyPool == 0) return;
+
+        uint256 gasUsed = gasStart - gasleft() + 50_000;
+        uint256 bounty = gasUsed * tx.gasprice;
+        if (bounty > penaltyPool) bounty = penaltyPool;
+        if (bounty == 0) return;
+
+        penaltyPool -= bounty;
+        (bool ok, ) = payable(msg.sender).call{value: bounty}("");
+        if (ok) {
+            emit ProgressBountyPaid(ticket, msg.sender, bounty);
+        } else {
+            penaltyPool += bounty;
+        }
+    }
+
+    function _penalizeLosingParticipant(address ticket, bool payWorker) private {
+        address loser = payWorker
+            ? IFreelanceEscrow(ticket).company()
+            : IFreelanceEscrow(ticket).worker();
+
+        if (loser == address(0)) return;
+
+        uint256 strikes = participantStrikes[loser] + 1;
+        participantStrikes[loser] = strikes;
+
+        if (strikes >= MAX_PARTICIPANT_STRIKES) {
+            participantBanned[loser] = true;
+        }
+
+        emit ParticipantPenalized(ticket, loser, strikes, participantBanned[loser]);
     }
 
     function _increaseReputation(address arbiter) private {
