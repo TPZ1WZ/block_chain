@@ -32,8 +32,6 @@ export default function TicketDetailPanel({
   arbiters,
   currentTime,
   hasCurrentArbiterVoted,
-  voteSummary,
-  requiredVotes,
   disputeFee,
   selectedDisputeArbiters = [],
   disabled,
@@ -363,24 +361,6 @@ export default function TicketDetailPanel({
                 </p>
               </div>
             )}
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              <div className="rounded-2xl bg-white/80 px-3 py-2 ring-1 ring-violet-100">
-                <p className="text-[11px] font-black uppercase text-violet-400">
-                  Tra Worker
-                </p>
-                <p className="mt-1 text-sm font-black text-violet-900">
-                  {voteSummary?.forWorker || 0}/{requiredVotes || arbiters.length}
-                </p>
-              </div>
-              <div className="rounded-2xl bg-white/80 px-3 py-2 ring-1 ring-violet-100">
-                <p className="text-[11px] font-black uppercase text-violet-400">
-                  Hoan Company
-                </p>
-                <p className="mt-1 text-sm font-black text-violet-900">
-                  {voteSummary?.forCompany || 0}/{requiredVotes || arbiters.length}
-                </p>
-              </div>
-            </div>
             {hasCurrentArbiterVoted && (
               <p className="mt-2 rounded-2xl bg-white/80 px-3 py-2 text-xs font-bold text-violet-700 ring-1 ring-violet-100">
                 Ví arbiter này đã bỏ phiếu cho ticket này.
